@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html dir="ltr" lang="en-US">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Ibaddie Auth">
+    <meta name="application-name" content="Ibaddie Auth">
+
+    <title>Ibaddie | Play-Only 2FA</title>
+    <meta name="title" content="Ibaddie | Play-Only 2FA">
+    <meta name="description" content="Secure 2FA code delivery for Ibaddie Minecraft Play-Only accounts.">
+    <meta name="theme-color" content="#000000">
+
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://ibaddie.github.io/PlayOnly-2FA">
+    <meta property="og:image" content="https://totp.codes/icons/2fa.png">
+    <meta property="og:title" content="Ibaddie | Play-Only 2FA">
+    <meta property="og:site_name" content="Ibaddie">
+    <meta property="og:description" content="Secure 2FA code delivery for Ibaddie Minecraft Play-Only accounts.">
+
+    <meta property="twitter:url" content="https://ibaddie.github.io/PlayOnly-2FA">
+    <meta property="twitter:title" content="Ibaddie | Play-Only 2FA">
+    <meta property="twitter:description" content="Secure 2FA code delivery for Ibaddie Minecraft Play-Only accounts.">
+    <meta property="twitter:image" content="https://totp.codes/icons/2fa.png">
+
+    <link rel="stylesheet" href="./css/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;500;700&display=swap" rel="stylesheet">
+    <link rel="preload stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/6.3.7/animations/shift-away.css" as="style"
+        crossorigin="anonymous">
+    <link rel="manifest" href="./manifest.json">
+
+    <link rel="icon" href="./favicon.ico">
+    <link rel="apple-touch-icon" href="./favicon.ico">
+
+
+    <script>window.addEventListener("load", () => document.body.classList.remove("preload"))</script>
+</head>
+
+<body class="preload">
+    <div class="background-anim"></div>
+    <div class="container glassmorphism">
+        <div class="header-section">
+            <h1 class="gradient-text" id="secretAdminTrigger" style="cursor: default; user-select: none;">Ibaddie</h1>
+            <h2 class="subtitle">Play-Only Launcher Access</h2>
+        </div>
+
+        <form>
+            <input type="text" readonly id="secret" placeholder="Connecting to server...">
+        </form>
+
+        <div class="code-container">
+            <layflags-rolling-number data-minimum="6" id="otp">000000</layflags-rolling-number>
+        </div>
+
+        <p class="timer-text">click to copy / expires in <b id="updatingIn">30</b></p>
+
+        <div class="warning-box">
+            <p><strong>Note:</strong> This code is for the Launcher <strong>only</strong> (can be any launcher).</p>
+            <p class="small">To protect accounts from being stolen, codes are strictly rate-limited and cannot be used
+                to navigate Microsoft security settings.</p>
+            <div class="upgrade-msg">
+                <p>✨ <strong>Want full access?</strong> If you wanna upgrade your account and gain full email access,
+                    message Ibaddie for a custom order and he can upgrade your account whenever!</p>
+            </div>
+        </div>
+    </div>
+    <script>if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js'));</script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/2.11.8/umd/popper.min.js"
+        crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/6.3.7/tippy.umd.min.js"
+        crossorigin="anonymous"></script>
+    <script src="./js/rolling-number.js"></script>
+    <script src="./js/totp.js"></script>
+    
+    <script>
+        let clickCount = 0;
+        let clickTimeout;
+        document.getElementById('secretAdminTrigger').addEventListener('click', () => {
+            clickCount++;
+            if (clickCount >= 3) {
+                window.location.href = 'admin.html';
+            }
+            clearTimeout(clickTimeout);
+            clickTimeout = setTimeout(() => {
+                clickCount = 0;
+            }, 1000); // Resets clicks if you don't do it within 1 second
+        });
+    </script>
+</body>
+
+</html>
