@@ -75,7 +75,7 @@ function renderTable(keys) {
         
         // We know the id is k.name, so build the url
         // Uses the current frontend host, not the backend host
-        const url = `${window.location.origin}/?token=${k.name}`;
+        const BASE_URL = `${window.location.origin}/ibaddie-auth`;
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
@@ -121,7 +121,7 @@ async function createToken() {
         dashboardMsg.textContent = "Link generated! Customer token is live.";
         
         // Copy to clipboard immediately
-        const fullUrl = `${window.location.origin}/?token=${data.token}`;
+        const BASE_URL = `${window.location.origin}/ibaddie-auth`;
         copyToClipboard(fullUrl);
 
         fetchList(); // reload table
