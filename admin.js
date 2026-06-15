@@ -85,7 +85,10 @@ function renderTable(keys) {
             <td><strong>${user}</strong></td>
             <td>${uses}/1</td>
             <td><a class="copy-link" onclick="copyToClipboard('${url}')">Copy Link</a></td>
-            <td><button class="action-btn" onclick="deleteToken('${k.name}')">Delete</button></td>
+            <td>
+                <button class="action-btn" style="margin-right: 5px;" onclick="resetToken('${k.name}')">Reset</button>
+                <button class="action-btn" onclick="deleteToken('${k.name}')">Delete</button>
+            </td>
         `;
         tableBody.appendChild(tr);
     });
@@ -152,6 +155,27 @@ async function deleteToken(tokenId) {
         fetchList();
     } catch(e) {
         alert("Error deleting: " + e.message);
+    }
+}
+
+async function resetToken(tokenId) {
+    if(!confirm("Reset uses back to 1/1 for this token?")) return;
+
+    try {
+        const res = await fetch(`${API_BASE}/api/admin/reset-token`, {
+            method: 'POST',
+            headers: { 
+                'Authorization': adminAuthToken,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ token: tokenId })
+        });
+        
+        if(!res.ok) throw new Error("Failed to reset token");
+        
+        fetchList();
+    } catch(e) {
+        alert("Error resetting: " + e.message);
     }
 }
 
