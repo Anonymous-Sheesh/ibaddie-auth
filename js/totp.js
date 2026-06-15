@@ -33,7 +33,18 @@ async function fetchOtp() {
             return resetOtp();
         }
 
+        // Handle wait response when code is expiring soon
+        if (data.wait) {
+            secretInput.value = `Showing code in ${data.remainingTime}...`;
+            secretInput.style.color = "#ff4c4c"; // Red text for warning
+            updatingIn.textContent = data.remainingTime;
+            // Auto-retry after the remaining time expires
+            setTimeout(fetchOtp, (data.remainingTime + 1) * 1000);
+            return;
+        }
+
         secretInput.value = `Access Token Active... (Uses left: ${data.usesLeft})`;
+        secretInput.style.color = ""; // Reset color
         setOtp(data.code);
         updatingIn.textContent = data.expiresIn;
     } catch (e) {
@@ -104,7 +115,11 @@ function fallbackCopyTextToClipboard(text) {
 setInterval(timer, 1000);
 
 window.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") fetchOtp();
+    // Only fetch on visibility change if we don't have a valid code showing
+    // This prevents "code limit reached" when alt-tabbing back
+    if (document.visibilityState === "visible" && currentOtp === none) {
+        fetchOtp();
+    }
 });
 
 otpEl.addEventListener('click', () => copyTextToClipboard(currentOtp));
