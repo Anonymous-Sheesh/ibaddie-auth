@@ -13,6 +13,7 @@ window.onerror = function (msg, url, line) {
 const none = "000000";
 let currentOtp = none;
 let token = null;
+let isWaiting = false; // Track if we're in wait state
 
 // Replace with production URL if hosted separately
 const API_BASE = "https://totp-backend.ibaddie.workers.dev";
@@ -35,11 +36,17 @@ async function fetchOtp() {
 
         // Handle wait response when code is expiring soon
         if (data.wait) {
+            isWaiting = true;
             secretInput.value = `Showing code in ${data.remainingTime}...`;
             secretInput.style.color = "#ff4c4c"; // Red text for warning
             updatingIn.textContent = data.remainingTime;
+            // Start countdown timer
+            startCountdown(data.remainingTime);
             // Auto-retry after the remaining time expires
-            setTimeout(fetchOtp, (data.remainingTime + 1) * 1000);
+            setTimeout(() => {
+                isWaiting = false;
+                fetchOtp();
+            }, (data.remainingTime + 1) * 1000);
             return;
         }
 
@@ -58,6 +65,19 @@ function setOtp(otp) {
     otpEl.value = otp;
     otpEl.style.opacity = '1';
     otpEl.style.cursor = 'pointer';
+}
+
+function startCountdown(seconds) {
+    let remaining = seconds;
+    const countdownInterval = setInterval(() => {
+        if (remaining <= 0) {
+            clearInterval(countdownInterval);
+            return;
+        }
+        remaining--;
+        secretInput.value = `Showing code in ${remaining}...`;
+        updatingIn.textContent = remaining;
+    }, 1000);
 }
 
 function resetOtp() {
@@ -115,9 +135,9 @@ function fallbackCopyTextToClipboard(text) {
 setInterval(timer, 1000);
 
 window.addEventListener("visibilitychange", () => {
-    // Only fetch on visibility change if we don't have a valid code showing
-    // This prevents "code limit reached" when alt-tabbing back
-    if (document.visibilityState === "visible" && currentOtp === none) {
+    // Only fetch on visibility change if we don't have a valid code showing AND not waiting
+    // This prevents "code limit reached" when alt-tabbing back during countdown
+    if (document.visibilityState === "visible" && currentOtp === none && !isWaiting) {
         fetchOtp();
     }
 });
