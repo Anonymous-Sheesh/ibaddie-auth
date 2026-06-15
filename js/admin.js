@@ -1,7 +1,7 @@
 // Configuration
 const API_BASE = "https://totp-backend.ibaddie.workers.dev";
 const SITE_BASE = window.location.pathname.includes('/ibaddie-auth')
-    ? `${window.location.origin}/ibaddie-auth` 
+    ? `${window.location.origin}/ibaddie-auth`
     : window.location.origin;
 let adminAuthToken = "";
 
