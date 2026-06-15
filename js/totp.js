@@ -39,7 +39,7 @@ async function fetchOtp() {
             isWaiting = true;
             secretInput.value = `Showing code in ${data.remainingTime}...`;
             secretInput.style.color = "#ff4c4c"; // Red text for warning
-            updatingIn.textContent = data.remainingTime;
+            updatingIn.textContent = "NIL"; // Show NIL in bottom timer when waiting
             // Start countdown timer
             startCountdown(data.remainingTime);
             // Auto-retry after the remaining time expires
@@ -76,7 +76,7 @@ function startCountdown(seconds) {
         }
         remaining--;
         secretInput.value = `Showing code in ${remaining}...`;
-        updatingIn.textContent = remaining;
+        // Don't update updatingIn here - let the timer function handle it
     }, 1000);
 }
 
@@ -88,13 +88,14 @@ function resetOtp() {
 }
 
 function timer() {
+    // If we're waiting for code, show NIL and don't do anything else
+    if (isWaiting) {
+        updatingIn.textContent = "NIL";
+        return;
+    }
+
     if (currentOtp === none) {
-        // If we're waiting for code, show NIL instead of counting down
-        if (isWaiting) {
-            updatingIn.textContent = "NIL";
-        } else {
-            updatingIn.textContent = "30";
-        }
+        updatingIn.textContent = "30";
         return;
     }
 
