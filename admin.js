@@ -1,5 +1,8 @@
 // Configuration
 const API_BASE = "https://totp-backend.ibaddie.workers.dev";
+const SITE_BASE = window.location.pathname.includes('/ibaddie-auth')
+    ? `${window.location.origin}/ibaddie-auth`
+    : window.location.origin;
 let adminAuthToken = "";
 
 // UI Elements
@@ -75,7 +78,7 @@ function renderTable(keys) {
         
         // We know the id is k.name, so build the url
         // Uses the current frontend host, not the backend host
-        const BASE_URL = `${window.location.origin}/ibaddie-auth`;
+        const url = `${SITE_BASE}/?token=${k.name}`;
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
@@ -121,7 +124,7 @@ async function createToken() {
         dashboardMsg.textContent = "Link generated! Customer token is live.";
         
         // Copy to clipboard immediately
-        const BASE_URL = `${window.location.origin}/ibaddie-auth`;
+        const fullUrl = `${SITE_BASE}/?token=${data.token}`;
         copyToClipboard(fullUrl);
 
         fetchList(); // reload table
