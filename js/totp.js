@@ -89,7 +89,12 @@ function resetOtp() {
 
 function timer() {
     if (currentOtp === none) {
-        updatingIn.textContent = "30";
+        // If we're waiting for code, show NIL instead of counting down
+        if (isWaiting) {
+            updatingIn.textContent = "NIL";
+        } else {
+            updatingIn.textContent = "30";
+        }
         return;
     }
 
