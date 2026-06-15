@@ -83,7 +83,7 @@ function renderTable(keys) {
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td><strong>${user}</strong></td>
-            <td>${uses}/2</td>
+            <td>${uses}/1</td>
             <td><a class="copy-link" onclick="copyToClipboard('${url}')">Copy Link</a></td>
             <td><button class="action-btn" onclick="deleteToken('${k.name}')">Delete</button></td>
         `;
