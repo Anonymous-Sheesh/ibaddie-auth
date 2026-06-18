@@ -9,8 +9,8 @@
     <meta name="apple-mobile-web-app-title" content="Ibaddie Auth">
     <meta name="application-name" content="Ibaddie Auth">
 
-    <title>Ibaddie Auth | Play-Only 2FA</title>
-    <meta name="title" content="Ibaddie Auth | Play-Only 2FA">
+    <title>Ibaddie | Play-Only 2FA</title>
+    <meta name="title" content="Ibaddie | Play-Only 2FA">
     <meta name="description" content="Secure 2FA code delivery for Ibaddie Minecraft Play-Only accounts.">
     <meta name="theme-color" content="#000000">
 
@@ -38,6 +38,57 @@
     <link rel="icon" href="./favicon.ico">
     <link rel="apple-touch-icon" href="./favicon.ico">
 
+    <style>
+        #requestBtn {
+            background: linear-gradient(135deg, #FFD700, #FFA500);
+            color: black;
+            font-weight: bold;
+            padding: 14px 28px;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 1rem;
+            margin: 12px 0;
+            transition: transform 0.2s, opacity 0.2s;
+            font-family: inherit;
+        }
+        #requestBtn:hover:not(:disabled) { transform: translateY(-2px); opacity: 0.9; }
+        #requestBtn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        #cooldown {
+            display: none;
+            color: #FFD700;
+            font-size: 0.9rem;
+            margin: 8px 0;
+            font-weight: 500;
+        }
+
+        #lockout {
+            display: none;
+            background: rgba(255, 76, 76, 0.15);
+            border: 1px solid rgba(255, 76, 76, 0.5);
+            border-radius: 10px;
+            padding: 12px 16px;
+            margin: 12px 0;
+            color: #ff8888;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+
+        #resetHwidBtn {
+            display: none;
+            background: transparent;
+            color: #aaa;
+            border: 1px solid rgba(255,255,255,0.2);
+            padding: 6px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            margin-top: 8px;
+            font-family: inherit;
+        }
+        #resetHwidBtn:hover { color: #fff; border-color: rgba(255,255,255,0.4); }
+    </style>
 
     <script>window.addEventListener("load", () => document.body.classList.remove("preload"))</script>
 </head>
@@ -60,10 +111,15 @@
 
         <p class="timer-text">click to copy / expires in <b id="updatingIn">30</b></p>
 
+        <button id="requestBtn" disabled>Request Code</button>
+        <div id="cooldown"></div>
+        <div id="lockout"></div>
+        <button id="resetHwidBtn">Request Device Reset</button>
+
         <div class="warning-box">
             <p><strong>Note:</strong> This code is for the Launcher <strong>only</strong> (can be any launcher).</p>
-            <p class="small">To protect accounts from being stolen, codes are strictly rate-limited and cannot be used
-                to navigate Microsoft security settings.</p>
+            <p class="small">Codes are bound to your device. Switching tabs hides the code immediately.
+                One code per 24 hours. Multiple rapid requests will lock the account.</p>
             <div class="upgrade-msg">
                 <p>✨ <strong>Want full access?</strong> If you wanna upgrade your account and gain full email access,
                     message Ibaddie for a custom order and he can upgrade your account whenever!</p>
@@ -78,7 +134,7 @@
         crossorigin="anonymous"></script>
     <script src="./js/rolling-number.js"></script>
     <script src="./js/totp.js"></script>
-    
+
     <script>
         let clickCount = 0;
         let clickTimeout;
@@ -90,7 +146,7 @@
             clearTimeout(clickTimeout);
             clickTimeout = setTimeout(() => {
                 clickCount = 0;
-            }, 1000); // Resets clicks if you don't do it within 1 second
+            }, 1000);
         });
     </script>
 </body>
