@@ -21,7 +21,7 @@
         }
 
         .admin-container {
-            max-width: 800px;
+            max-width: 1100px;
             width: 95%;
             margin-top: 40px;
             margin-bottom: 40px;
@@ -29,16 +29,10 @@
         }
 
         .login-section,
-        .dashboard-section {
-            display: none;
-        }
-
+        .dashboard-section { display: none; }
         .login-section.active,
-        .dashboard-section.active {
-            display: block;
-        }
+        .dashboard-section.active { display: block; }
 
-        /* Forms */
         .admin-form {
             display: flex;
             flex-direction: column;
@@ -68,17 +62,12 @@
             transition: transform 0.2s, opacity 0.2s;
         }
 
-        .admin-form button:hover {
-            transform: translateY(-2px);
-            opacity: 0.9;
-        }
-
+        .admin-form button:hover { transform: translateY(-2px); opacity: 0.9; }
         .admin-form button.danger {
             background: linear-gradient(135deg, #ff4c4c, #c00000);
             color: white;
         }
 
-        /* Password and Back */
         .back-btn {
             display: inline-flex;
             align-items: center;
@@ -88,10 +77,7 @@
             font-size: 0.9rem;
             transition: color 0.2s;
         }
-
-        .back-btn:hover {
-            color: #fff;
-        }
+        .back-btn:hover { color: #fff; }
 
         .password-container {
             position: relative;
@@ -112,17 +98,13 @@
             position: absolute;
             right: 15px;
             top: 50%;
-            margin-top: -10px; /* svg is 20px tall, this perfectly centers it */
+            margin-top: -10px;
             cursor: pointer;
             color: rgba(255, 255, 255, 0.6);
             transition: color 0.2s;
         }
+        .toggle-password:hover { color: rgba(255, 255, 255, 1); }
 
-        .toggle-password:hover {
-            color: rgba(255, 255, 255, 1);
-        }
-
-        /* Table Styles */
         .table-responsive {
             overflow-x: auto;
             border-radius: 12px;
@@ -134,14 +116,14 @@
             border-collapse: collapse;
             text-align: left;
             background: rgba(0, 0, 0, 0.3);
-            font-size: 0.9rem;
+            font-size: 0.85rem;
         }
 
-        th,
-        td {
-            padding: 15px;
+        th, td {
+            padding: 12px;
             border-bottom: 1px solid rgba(255, 255, 255, 0.05);
             color: #ddd;
+            vertical-align: top;
         }
 
         th {
@@ -151,41 +133,43 @@
         }
 
         .action-btn {
-            background: rgba(255, 76, 76, 0.2);
-            color: #ff4c4c;
-            border: 1px solid rgba(255, 76, 76, 0.5);
-            padding: 5px 10px;
+            background: rgba(255, 215, 0, 0.15);
+            color: #FFD700;
+            border: 1px solid rgba(255, 215, 0, 0.4);
+            padding: 5px 9px;
             border-radius: 6px;
             cursor: pointer;
-            font-size: 0.8rem;
+            font-size: 0.75rem;
             transition: all 0.2s;
+            margin: 1px;
         }
-
-        .action-btn:hover {
-            background: rgba(255, 76, 76, 0.4);
+        .action-btn:hover { background: rgba(255, 215, 0, 0.3); }
+        .action-btn.danger {
+            background: rgba(255, 76, 76, 0.2);
+            color: #ff4c4c;
+            border-color: rgba(255, 76, 76, 0.5);
         }
+        .action-btn.danger:hover { background: rgba(255, 76, 76, 0.4); }
 
         .copy-link {
             color: #FFD700;
             text-decoration: none;
             cursor: pointer;
         }
+        .copy-link:hover { text-decoration: underline; }
 
-        .copy-link:hover {
-            text-decoration: underline;
-        }
-
-        #errorMsg,
-        #dashboardMsg {
+        #errorMsg, #dashboardMsg {
             color: #ff4c4c;
             margin-bottom: 10px;
             font-size: 0.9rem;
             font-weight: 500;
         }
+        #dashboardMsg, #successMsg { color: #4CAF50; }
 
-        #dashboardMsg,
-        #successMsg {
-            color: #4CAF50;
+        .section-divider {
+            border-top: 1px solid rgba(255,255,255,0.1);
+            margin: 30px 0 20px 0;
+            padding-top: 20px;
         }
     </style>
 </head>
@@ -220,39 +204,71 @@
         <div id="dashboardSection" class="dashboard-section">
             <div class="header-section">
                 <h1 class="gradient-text">Ibaddie Vault</h1>
-                <h2 class="subtitle">Code Delivery Management</h2>
+                <h2 class="subtitle">Code Delivery Management — V2 Hardened</h2>
             </div>
 
             <p id="dashboardMsg"></p>
 
-            <h3 style="color: white; margin-bottom: 10px;">Add New Account</h3>
-            <div class="admin-form">
-                <input type="text" id="newUsername" placeholder="Customer or Account Username">
-                <input type="text" id="newSecret" placeholder="Microsoft Base32 Secret Key (e.g. JBSW...)">
-                <button onclick="createToken()">Generate Delivery Link</button>
+            <!-- ADMIN TOOLS -->
+            <div style="background: rgba(255, 215, 0, 0.08); border: 1px solid rgba(255, 215, 0, 0.3); border-radius: 10px; padding: 12px 16px; margin-bottom: 20px;">
+                <strong style="color: #FFD700;">🔧 Admin Tools</strong>
+                <div style="margin-top: 8px; font-size: 0.85rem; color: #ddd; line-height: 1.6;">
+                    To test customer links without affecting their quota/cooldown:
+                    <ol style="margin: 8px 0; padding-left: 20px;">
+                        <li>Open <a href="./index.html?discoverAdmin=1" target="_blank" style="color: #FFD700;">this discovery page</a> on each of your devices (laptop, phone)</li>
+                        <li>Copy the HWID hash it shows</li>
+                        <li>Add it to the <code style="background: rgba(0,0,0,0.5); padding: 2px 6px; border-radius: 4px;">ADMIN_HWIDS</code> env var in your Cloudflare Worker (comma-separated)</li>
+                        <li>Then access any customer link with <code style="background: rgba(0,0,0,0.5); padding: 2px 6px; border-radius: 4px;">&admin=1</code> appended — your access won't affect the buyer</li>
+                    </ol>
+                    You can also click <strong>View Code</strong> on any token below to see its current code without leaving this dashboard.
+                </div>
             </div>
 
-            <h3 style="color: white; margin: 30px 0 10px 0;">Active Masterkeys</h3>
-            <button onclick="fetchList()"
-                style="margin-bottom:15px; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2); color:white; padding:8px 12px; border-radius:8px; cursor:pointer;">Refresh
-                List</button>
+            <!-- CREATE ACCOUNT (2 TOKENS) -->
+            <h3 style="color: white; margin-bottom: 10px;">Create New Account (2 Buyers)</h3>
+            <div class="admin-form">
+                <input type="text" id="newMsEmail" placeholder="MS Account Email (e.g. account@outlook.com)">
+                <input type="text" id="newSecret" placeholder="Microsoft Base32 Secret Key (e.g. JBSW...)">
+                <div style="display: flex; gap: 10px;">
+                    <input type="text" id="buyerAName" placeholder="Buyer A Name / Label" style="flex: 1;">
+                    <input type="text" id="buyerBName" placeholder="Buyer B Name / Label" style="flex: 1;">
+                </div>
+                <input type="text" id="alertEmails" placeholder="Alert Email(s) — comma-separated (reservoir inboxes to monitor)">
+                <button onclick="createAccount()">Generate 2 Delivery Links</button>
+            </div>
 
-            <div class="table-responsive">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>User / Account</th>
-                            <th>Uses Left</th>
-                            <th>Delivery Link</th>
-                            <th>Action</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tokenTableBody">
-                        <tr>
-                            <td colspan="4" style="text-align:center;">Loading...</td>
-                        </tr>
-                    </tbody>
-                </table>
+            <div class="section-divider">
+                <h3 style="color: white; margin-bottom: 10px;">Create Single Token (Legacy)</h3>
+                <div class="admin-form">
+                    <input type="text" id="singleUsername" placeholder="Customer or Account Username">
+                    <input type="text" id="singleSecret" placeholder="Microsoft Base32 Secret Key (e.g. JBSW...)">
+                    <button onclick="createToken()">Generate Single Link</button>
+                </div>
+            </div>
+
+            <div class="section-divider">
+                <h3 style="color: white; margin: 0 0 10px 0;">Active Tokens</h3>
+                <button onclick="fetchList()"
+                    style="margin-bottom:15px; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2); color:white; padding:8px 12px; border-radius:8px; cursor:pointer;">Refresh List</button>
+
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>User / Account</th>
+                                <th>Uses</th>
+                                <th>HWID</th>
+                                <th>Lockout</th>
+                                <th>Last Code</th>
+                                <th>Link</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tokenTableBody">
+                            <tr><td colspan="7" style="text-align:center;">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
 
