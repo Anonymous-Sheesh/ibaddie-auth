@@ -12,7 +12,7 @@
     <title>Ibaddie | Play-Only 2FA</title>
     <meta name="title" content="Ibaddie | Play-Only 2FA">
     <meta name="description" content="Secure 2FA code delivery for Ibaddie Minecraft Play-Only accounts.">
-    <meta name="theme-color" content="#000000">
+    <meta name="theme-color" content="#070b16">
 
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://ibaddie.github.io/PlayOnly-2FA">
@@ -29,7 +29,7 @@
     <link rel="stylesheet" href="./css/style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="preload stylesheet"
         href="https://cdnjs.cloudflare.com/ajax/libs/tippy.js/6.3.7/animations/shift-away.css" as="style"
         crossorigin="anonymous">
@@ -44,10 +44,15 @@
 
 <body class="preload">
     <div class="background-anim"></div>
-    <div class="container glassmorphism">
+
+    <main class="container glassmorphism">
         <div class="header-section">
+            <div class="brand-badge">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                <span>Client-Side · Zero Servers</span>
+            </div>
             <h1 class="gradient-text" id="secretAdminTrigger" style="cursor: default; user-select: none;">Ibaddie</h1>
-            <h2 class="subtitle">Play-Only Launcher Access</h2>
+            <h2 class="subtitle">Your secure, private 2FA code — no account, no server, nothing leaves your device.</h2>
         </div>
 
         <form>
@@ -55,21 +60,56 @@
         </form>
 
         <div class="code-container">
-            <layflags-rolling-number data-minimum="6" id="otp">000000</layflags-rolling-number>
-        </div>
+            <!-- SVG gradient definition for the countdown ring -->
+            <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+                <defs>
+                    <linearGradient id="ringGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stop-color="#7c5cff"></stop>
+                        <stop offset="100%" stop-color="#00d4ff"></stop>
+                    </linearGradient>
+                </defs>
+            </svg>
 
-        <p class="timer-text">click to copy / expires in <b id="updatingIn">30</b></p>
+            <div class="code-ring">
+                <svg class="progress-ring" width="240" height="240" viewBox="0 0 240 240" aria-hidden="true">
+                    <circle class="ring-bg" cx="120" cy="120" r="110"></circle>
+                    <circle class="ring-progress" cx="120" cy="120" r="110"></circle>
+                </svg>
+                <div class="code-inner">
+                    <layflags-rolling-number data-minimum="6" id="otp">000000</layflags-rolling-number>
+                    <div class="code-meta">
+                        <span class="status-dot" aria-hidden="true"></span>
+                        <span>Live code · click to copy</span>
+                    </div>
+                </div>
+            </div>
+
+            <p class="timer-text">
+                <span>Expires in</span>
+                <b id="updatingIn">30</b>
+                <span>seconds</span>
+            </p>
+        </div>
 
         <div class="warning-box">
-            <p><strong>Note:</strong> This code is for the Launcher <strong>only</strong> (can be any launcher).</p>
-            <p class="small">To protect accounts from being stolen, codes are strictly rate-limited and cannot be used
-                to navigate Microsoft security settings.</p>
+            <div class="warning-row">
+                <div class="warning-icon" aria-hidden="true">🛡️</div>
+                <div>
+                    <p><strong>Launcher-only code.</strong> Use this code only for the launcher sign-in (works with any launcher).</p>
+                </div>
+            </div>
+            <p class="small">To protect accounts from being stolen, codes are strictly rate-limited and cannot be used to navigate Microsoft security settings.</p>
             <div class="upgrade-msg">
-                <p>✨ <strong>Want full access?</strong> If you wanna upgrade your account and gain full email access,
-                    message Ibaddie for a custom order and he can upgrade your account whenever!</p>
+                <p>✨ <strong>Want full access?</strong> If you'd like to upgrade your account and gain full email access, message Ibaddie for a custom order — he can upgrade your account whenever you're ready.</p>
             </div>
         </div>
-    </div>
+    </main>
+
+    <footer class="footer">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+        <span>All data stays on your device. Nothing is ever sent to a server.</span>
+    </footer>
+
     <script>if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js'));</script>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/2.11.8/umd/popper.min.js"
