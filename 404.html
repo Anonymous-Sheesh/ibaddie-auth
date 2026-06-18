@@ -1,12 +1,177 @@
 <!DOCTYPE html>
-<html>
+<html lang="en-US">
 <head>
     <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#070b16">
+    <title>Redirecting · Ibaddie Auth</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- Inline styles so this page renders fully even before any external CSS loads -->
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; border: 0; }
+        html, body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #070b16;
+            color: #f5f7fa;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem 1rem;
+            position: relative;
+            overflow: hidden;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        body::before {
+            content: '';
+            position: fixed;
+            inset: -50%;
+            background:
+                radial-gradient(circle at 25% 15%, rgba(124, 92, 255, 0.20) 0%, transparent 45%),
+                radial-gradient(circle at 75% 85%, rgba(0, 212, 255, 0.14) 0%, transparent 45%);
+            animation: pulseBg 22s infinite alternate ease-in-out;
+            z-index: -1;
+        }
+        @keyframes pulseBg {
+            0%   { transform: scale(1) rotate(0deg); }
+            100% { transform: scale(1.15) rotate(8deg); }
+        }
+        .card {
+            background: rgba(18, 24, 45, 0.55);
+            backdrop-filter: blur(28px) saturate(180%);
+            -webkit-backdrop-filter: blur(28px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 28px;
+            box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45),
+                        inset 0 1px 0 rgba(255, 255, 255, 0.06);
+            padding: 3rem 2.5rem;
+            max-width: 480px;
+            width: 100%;
+            text-align: center;
+            animation: fadeUp 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        @keyframes fadeUp {
+            from { opacity: 0; transform: translateY(24px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.45rem 0.95rem;
+            background: rgba(124, 92, 255, 0.10);
+            border: 1px solid rgba(124, 92, 255, 0.25);
+            border-radius: 9999px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: #b794ff;
+            margin-bottom: 1.75rem;
+        }
+        .badge svg { width: 13px; height: 13px; }
+        .spinner {
+            width: 36px;
+            height: 36px;
+            border: 3px solid rgba(124, 92, 255, 0.2);
+            border-top-color: #7c5cff;
+            border-radius: 50%;
+            margin: 0 auto 1.75rem;
+            animation: spin 0.9s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        h1 {
+            font-size: 3rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #c4b5fd 0%, #67e8f9 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 0.5rem;
+            letter-spacing: -0.035em;
+            line-height: 1.05;
+        }
+        .lead {
+            font-size: 1.05rem;
+            color: #a3acc4;
+            margin-bottom: 0.5rem;
+            line-height: 1.55;
+        }
+        .muted {
+            font-size: 0.85rem;
+            color: #6b7385;
+            margin-bottom: 2rem;
+            line-height: 1.55;
+        }
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: linear-gradient(135deg, #7c5cff 0%, #00d4ff 100%);
+            color: white;
+            text-decoration: none;
+            padding: 0.9rem 1.5rem;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 0.95rem;
+            box-shadow: 0 8px 20px rgba(124, 92, 255, 0.3);
+            transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease;
+        }
+        .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 12px 28px rgba(124, 92, 255, 0.42);
+        }
+        .btn svg { width: 16px; height: 16px; }
+        .footer-note {
+            margin-top: 2rem;
+            font-size: 0.75rem;
+            color: #6b7385;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.45rem;
+            line-height: 1.5;
+        }
+        .footer-note svg { width: 13px; height: 13px; color: #34d399; flex-shrink: 0; }
+
+        @media (max-width: 480px) {
+            .card { padding: 2.25rem 1.5rem; }
+            h1 { font-size: 2.5rem; }
+            .lead { font-size: 0.98rem; }
+        }
+    </style>
+
     <script>
         const path = window.location.pathname.slice(1);
         window.location.replace("/?code=" + encodeURIComponent(path));
     </script>
 </head>
 <body>
+    <div class="card">
+        <div class="badge">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+            <span>Ibaddie Auth</span>
+        </div>
+
+        <div class="spinner" aria-hidden="true"></div>
+        <h1>Redirecting</h1>
+        <p class="lead">Taking you to your secure code…</p>
+        <p class="muted">If this page doesn't reload automatically, tap the button below to continue.</p>
+
+        <a href="/" class="btn">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 0 0 1 1h3m10-11l2 2m-2-2v10a1 1 0 0 1-1 1h-3m-6 0a1 1 0 0 0 1-1v-4a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v4a1 1 0 0 0 1 1m-6 0h6"></path></svg>
+            Go to Main App
+        </a>
+
+        <div class="footer-note">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+            <span>All data stays on your device.</span>
+        </div>
+    </div>
 </body>
 </html>
