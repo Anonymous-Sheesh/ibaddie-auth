@@ -11,181 +11,19 @@
     <link rel="stylesheet" href="./css/style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
     <style>
+        /* Admin page only needs to override the body layout — everything else
+           lives in style.css so the design language stays consistent. */
         body.admin-body {
             overflow-y: auto !important;
+            overflow-x: hidden;
             min-height: 100vh;
-            padding-bottom: 60px;
-        }
-
-        .admin-container {
-            max-width: 800px;
-            width: 95%;
-            margin-top: 40px;
-            margin-bottom: 40px;
-            padding: 30px;
-        }
-
-        .login-section,
-        .dashboard-section {
-            display: none;
-        }
-
-        .login-section.active,
-        .dashboard-section.active {
+            padding: 2rem 1rem 4rem;
             display: block;
-        }
-
-        /* Forms */
-        .admin-form {
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-            margin-bottom: 25px;
-        }
-
-        .admin-form input,
-        .admin-form button {
-            padding: 15px;
-            border-radius: 12px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            font-family: inherit;
-            font-size: 1rem;
-        }
-
-        .admin-form input {
-            background: rgba(0, 0, 0, 0.5);
-            color: white;
-        }
-
-        .admin-form button {
-            background: linear-gradient(135deg, #FFD700, #FFA500);
-            color: black;
-            font-weight: bold;
-            cursor: pointer;
-            transition: transform 0.2s, opacity 0.2s;
-        }
-
-        .admin-form button:hover {
-            transform: translateY(-2px);
-            opacity: 0.9;
-        }
-
-        .admin-form button.danger {
-            background: linear-gradient(135deg, #ff4c4c, #c00000);
-            color: white;
-        }
-
-        /* Password and Back */
-        .back-btn {
-            display: inline-flex;
-            align-items: center;
-            color: #ddd;
-            text-decoration: none;
-            margin-bottom: 20px;
-            font-size: 0.9rem;
-            transition: color 0.2s;
-        }
-
-        .back-btn:hover {
-            color: #fff;
-        }
-
-        .password-container {
-            position: relative;
-            display: flex;
-            align-items: center;
-            width: 100%;
-        }
-
-        .password-container input {
-            width: 100%;
-            padding: 15px;
-            padding-right: 45px;
-            margin: 0;
-            box-sizing: border-box;
-        }
-
-        .toggle-password {
-            position: absolute;
-            right: 15px;
-            top: 50%;
-            margin-top: -10px; /* svg is 20px tall, this perfectly centers it */
-            cursor: pointer;
-            color: rgba(255, 255, 255, 0.6);
-            transition: color 0.2s;
-        }
-
-        .toggle-password:hover {
-            color: rgba(255, 255, 255, 1);
-        }
-
-        /* Table Styles */
-        .table-responsive {
-            overflow-x: auto;
-            border-radius: 12px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            text-align: left;
-            background: rgba(0, 0, 0, 0.3);
-            font-size: 0.9rem;
-        }
-
-        th,
-        td {
-            padding: 15px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-            color: #ddd;
-        }
-
-        th {
-            background: rgba(255, 255, 255, 0.05);
-            color: #fff;
-            font-weight: bold;
-        }
-
-        .action-btn {
-            background: rgba(255, 76, 76, 0.2);
-            color: #ff4c4c;
-            border: 1px solid rgba(255, 76, 76, 0.5);
-            padding: 5px 10px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 0.8rem;
-            transition: all 0.2s;
-        }
-
-        .action-btn:hover {
-            background: rgba(255, 76, 76, 0.4);
-        }
-
-        .copy-link {
-            color: #FFD700;
-            text-decoration: none;
-            cursor: pointer;
-        }
-
-        .copy-link:hover {
-            text-decoration: underline;
-        }
-
-        #errorMsg,
-        #dashboardMsg {
-            color: #ff4c4c;
-            margin-bottom: 10px;
-            font-size: 0.9rem;
-            font-weight: 500;
-        }
-
-        #dashboardMsg,
-        #successMsg {
-            color: #4CAF50;
+            align-items: initial;
+            justify-content: initial;
         }
     </style>
 </head>
@@ -195,22 +33,33 @@
 
     <div class="container glassmorphism admin-container">
 
-        <a href="index.html" class="back-btn">← Back to Main</a>
+        <a href="index.html" class="back-btn">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+            Back to Main
+        </a>
 
         <!-- LOGIN SECTION -->
         <div id="loginSection" class="login-section active">
             <div class="header-section">
+                <div class="brand-badge">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                    <span>Secure Vault</span>
+                </div>
                 <h1 class="gradient-text">Admin Login</h1>
-                <h2 class="subtitle">Secure Vault Access</h2>
+                <h2 class="subtitle">Enter your master password to unlock the vault.</h2>
             </div>
 
             <p id="errorMsg"></p>
 
             <div class="admin-form">
-                <div class="password-container">
-                    <input type="password" id="adminPassword" placeholder="Enter Master Password">
-                    <svg id="eyeIcon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="toggle-password" onclick="togglePassword()"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-                    <svg id="eyeOffIcon" style="display:none;" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="toggle-password" onclick="togglePassword()"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+                <div class="field-group">
+                    <label class="field-label" for="adminPassword">Master Password</label>
+                    <div class="password-container">
+                        <input type="password" id="adminPassword" placeholder="Enter your master password">
+                        <svg id="eyeIcon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="toggle-password" onclick="togglePassword()"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                        <svg id="eyeOffIcon" style="display:none;" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="toggle-password" onclick="togglePassword()"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+                    </div>
+                    <p class="field-helper">Your password decrypts the vault locally in your browser. It is never transmitted or stored on a server.</p>
                 </div>
                 <button onclick="attemptLogin()">Enter Vault</button>
             </div>
@@ -219,23 +68,37 @@
         <!-- DASHBOARD SECTION -->
         <div id="dashboardSection" class="dashboard-section">
             <div class="header-section">
+                <div class="brand-badge">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                    <span>Vault Unlocked</span>
+                </div>
                 <h1 class="gradient-text">Ibaddie Vault</h1>
-                <h2 class="subtitle">Code Delivery Management</h2>
+                <h2 class="subtitle">Manage delivery tokens for Play-Only accounts.</h2>
             </div>
 
             <p id="dashboardMsg"></p>
 
-            <h3 style="color: white; margin-bottom: 10px;">Add New Account</h3>
+            <h3 class="section-heading">Add New Account</h3>
+            <p class="section-subheading">Create a new TOTP delivery link for a customer or account. The secret key is the Base32 string Microsoft shows when 2FA is enabled on the account.</p>
             <div class="admin-form">
-                <input type="text" id="newUsername" placeholder="Customer or Account Username">
-                <input type="text" id="newSecret" placeholder="Microsoft Base32 Secret Key (e.g. JBSW...)">
+                <div class="field-group">
+                    <label class="field-label" for="newUsername">Customer / Account Username</label>
+                    <input type="text" id="newUsername" placeholder="e.g. player123">
+                </div>
+                <div class="field-group">
+                    <label class="field-label" for="newSecret">Microsoft Base32 Secret Key</label>
+                    <input type="text" id="newSecret" placeholder="e.g. JBSWY3DPEHPK3PXP">
+                    <p class="field-helper">This is the key shown when you enable 2FA on a website — usually displayed as a QR code or a text string. Paste it here exactly as given.</p>
+                </div>
                 <button onclick="createToken()">Generate Delivery Link</button>
             </div>
 
-            <h3 style="color: white; margin: 30px 0 10px 0;">Active Masterkeys</h3>
-            <button onclick="fetchList()"
-                style="margin-bottom:15px; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2); color:white; padding:8px 12px; border-radius:8px; cursor:pointer;">Refresh
-                List</button>
+            <h3 class="section-heading">Active Masterkeys</h3>
+            <p class="section-subheading">All currently active delivery tokens. Refresh to see the latest usage counts.</p>
+            <button onclick="fetchList()" class="refresh-btn">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                Refresh List
+            </button>
 
             <div class="table-responsive">
                 <table>
@@ -249,7 +112,7 @@
                     </thead>
                     <tbody id="tokenTableBody">
                         <tr>
-                            <td colspan="4" style="text-align:center;">Loading...</td>
+                            <td colspan="4" style="text-align:center; padding: 2.5rem 1rem; color: var(--text-muted);">Loading masterkeys…</td>
                         </tr>
                     </tbody>
                 </table>
