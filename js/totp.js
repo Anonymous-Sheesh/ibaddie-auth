@@ -196,8 +196,16 @@ function showLockout(reason, retryInSeconds) {
         lockoutEl.style.display = 'block';
         const h = Math.floor(retryInSeconds / 3600);
         const m = Math.floor((retryInSeconds % 3600) / 60);
-        lockoutEl.innerHTML = `<strong>Account locked.</strong> ${reason || 'Suspicious activity detected.'}<br>` +
-            `Retry in ${h}h ${m}m. Contact Ibaddie if you believe this is an error.`;
+        lockoutEl.innerHTML = `
+            <strong>🔒 Account locked for 3 days</strong>
+            <div style="margin-top: 8px; font-size: 0.85rem; line-height: 1.55;">
+                ${reason || 'Security precautions.'}<br><br>
+                <em>This is for security precautions. You should only need a code once or twice to log in to the launcher — any more is a risk to the account. If this is an issue, purchase full access via custom order by messaging Ibaddie. You can ask for codes after 3 days again.</em>
+            </div>
+            <div style="margin-top: 10px; font-size: 0.8rem; color: #ffaaaa;">
+                ⏳ Retry in <strong style="color: #ff4c4c;">${h}h ${m}m</strong>
+            </div>
+        `;
     }
     if (requestBtn) requestBtn.disabled = true;
     if (resetHwidBtn) resetHwidBtn.style.display = 'inline-block';
