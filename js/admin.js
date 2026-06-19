@@ -1,5 +1,5 @@
 // ══════════════════════════════════════════════════════════════════════════════
-// admin.js — V2.0 HARDENED ADMIN
+// admin.js — V2.0 HARDENED ADMlN
 // ══════════════════════════════════════════════════════════════════════════════
 // Changes from V1:
 //   • "Create Account" form creates 2 tokens at once (Buyer A + Buyer B)
