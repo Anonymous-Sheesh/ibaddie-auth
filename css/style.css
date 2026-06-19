@@ -26,17 +26,36 @@
     transition: all 400ms cubic-bezier(0.25, 1, 0.5, 1);
 }
 
-html,
+html {
+    background-color: #050505;
+    color: white;
+    margin: 0;
+    padding: 0;
+    height: auto;
+    min-height: 100vh;
+    position: relative;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
 body {
     background-color: #050505;
     color: white;
+    margin: 0;
+    padding: 0;
+    height: auto;
+    min-height: 100vh;
+    position: relative;
+}
+
+/* Customer page only: center content vertically and horizontally, no scroll */
+body:not(.admin-body) {
     display: flex;
     align-items: center;
     justify-content: center;
+    overflow: hidden;
     min-height: 100vh;
     min-width: 100vw;
-    overflow: hidden;
-    position: relative;
 }
 
 /* ─── 2. BACKGROUND ANIMATION ───────────────────────────────────────────────── */
@@ -427,10 +446,15 @@ form {
 /* ─── 6. ADMIN DASHBOARD (admin.html) ───────────────────────────────────────── */
 
 body.admin-body {
+    display: block !important;
     overflow-y: auto !important;
-    min-height: 100vh;
-    padding: 20px 0 60px 0;
-    align-items: flex-start;
+    overflow-x: hidden !important;
+    height: auto !important;
+    min-height: 100vh !important;
+    padding: 20px 0 60px 0 !important;
+    align-items: initial !important;
+    justify-content: initial !important;
+    margin: 0 !important;
 }
 
 .admin-container {
