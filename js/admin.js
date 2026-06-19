@@ -91,8 +91,15 @@ function renderTable(keys) {
         tableBody.innerHTML = `<tr><td colspan="7" style="text-align:center;">No active tokens. Create one above!</td></tr>`;
         return;
     }
+    // Sort by createdAt descending — newest accounts at top, oldest at bottom.
+    // Tokens without createdAt (legacy) get 0 and sink to the bottom.
+    const sortedKeys = [...keys].sort((a, b) => {
+        const aTime = (a.metadata && a.metadata.createdAt) || 0;
+        const bTime = (b.metadata && b.metadata.createdAt) || 0;
+        return bTime - aTime;
+    });
     tableBody.innerHTML = "";
-    keys.forEach(k => {
+    sortedKeys.forEach(k => {
         const meta = k.metadata || {};
         const user = meta.user || "Unknown";
         const uses = meta.usesLeft !== undefined ? meta.usesLeft : "?";
