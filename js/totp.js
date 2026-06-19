@@ -349,27 +349,17 @@ function CONFIG_COOLDOWN_SECONDS() {
 // ─── HWID RESET ────────────────────────────────────────────────────────────────
 
 async function requestHwidReset() {
+    // Customer-side HWID reset is intentionally NOT an API call.
+    // The /api/admin/reset-hwid endpoint requires admin auth (which customers
+    // don't have). Customers must contact Ibaddie to request a device reset —
+    // Ibaddie then clicks "Reset HWID" in the admin dashboard (no cooldown for admins).
     if (!token) return;
-    if (!confirm("Request a device reset? This is allowed once every 7 days. You'll need to click Request Code again after.")) return;
-    try {
-        const res = await fetch(`${API_BASE}/api/admin/reset-hwid`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token })
-        });
-        const data = await res.json();
-        if (res.ok) {
-            alert("Device reset approved. Click Request Code again.");
-            isLocked = false;
-            if (lockoutEl) lockoutEl.style.display = 'none';
-            if (requestBtn) requestBtn.disabled = false;
-            if (resetHwidBtn) resetHwidBtn.style.display = 'none';
-        } else {
-            alert("Reset denied: " + (data.error || 'unknown reason'));
-        }
-    } catch (e) {
-        alert("Network error: " + e.message);
-    }
+    alert(
+        "Need to switch devices?\n\n" +
+        "Please contact Ibaddie to request a device reset.\n" +
+        "Once Ibaddie approves it, come back to this page on your new device and click Request Code.\n\n" +
+        "This is a security measure — device binding can only be reset by the account seller to prevent URL sharing."
+    );
 }
 
 // ─── CLIPBOARD ─────────────────────────────────────────────────────────────────
