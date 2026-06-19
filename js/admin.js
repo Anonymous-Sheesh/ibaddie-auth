@@ -1,3 +1,13 @@
+// ══════════════════════════════════════════════════════════════════════════════
+// admin.js — V2.0 HARDENED ADMIN
+// ══════════════════════════════════════════════════════════════════════════════
+// Changes from V1:
+//   • "Create Account" form creates 2 tokens at once (Buyer A + Buyer B)
+//   • Token table shows: lockout status, HWID bound, last issued, offense count
+//   • Per-token actions: Reset Uses, Reset HWID, Reset Lockout, Delete
+//   • Legacy single-token creation still available via "Create Single Token"
+// ══════════════════════════════════════════════════════════════════════════════
+
 const API_BASE = "https://totp-backend.ibaddie.workers.dev";
 const SITE_BASE = window.location.pathname.includes('/ibaddie-auth')
     ? `${window.location.origin}/ibaddie-auth`
@@ -87,33 +97,33 @@ function renderTable(keys) {
         const user = meta.user || "Unknown";
         const uses = meta.usesLeft !== undefined ? meta.usesLeft : "?";
         const locked = meta.lockoutUntil && meta.lockoutUntil > Date.now();
-        const hwidBound = meta.hwidBound ? "✅" : "❌";
+        const hwidBound = meta.hwidBound
+            ? `<span class="hwid-yes" title="Device bound">✅</span>`
+            : `<span class="hwid-no" title="No device bound yet">❌</span>`;
         const lockoutStatus = locked
-            ? `<span style="color:#ff4c4c;">LOCKED (${formatLockout(meta.lockoutUntil)})</span>`
-            : '<span style="color:#4CAF50;">OK</span>';
+            ? `<span class="badge-locked">LOCKED<br><span style="font-size:0.7rem; font-weight:400;">(${formatLockout(meta.lockoutUntil)})</span></span>`
+            : `<span class="badge-ok">OK</span>`;
         const url = `${SITE_BASE}/?token=${k.name}`;
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>
                 <strong>${user}</strong><br>
-                <span style="font-size:0.75rem; color:#888;">${meta.msEmail || 'no MS email'}</span>
+                <span class="meta-sub">${meta.msEmail || 'no MS email'}</span>
             </td>
             <td>${uses}/1</td>
-            <td>${hwidBound}</td>
+            <td style="text-align:center;">${hwidBound}</td>
             <td>${lockoutStatus}</td>
             <td>
-                <span style="font-size:0.75rem; color:#aaa;">
-                    Last: ${formatTimeAgo(meta.lastIssuedAt)}
-                </span>
+                <span class="meta-sub">Last: ${formatTimeAgo(meta.lastIssuedAt)}</span>
             </td>
             <td><a class="copy-link" onclick="copyToClipboard('${url}')">Copy Link</a></td>
             <td>
-                <button class="action-btn" style="margin: 2px; background: rgba(76, 175, 80, 0.2); color: #4CAF50; border-color: rgba(76, 175, 80, 0.5);" onclick="viewCode('${k.name}')">View Code</button>
-                <button class="action-btn" style="margin: 2px;" onclick="resetToken('${k.name}')">Reset Uses</button>
-                <button class="action-btn" style="margin: 2px;" onclick="resetHwid('${k.name}')">Reset HWID</button>
-                <button class="action-btn" style="margin: 2px;" onclick="resetLockout('${k.name}')">Unlock</button>
-                <button class="action-btn danger" style="margin: 2px;" onclick="deleteToken('${k.name}')">Delete</button>
+                <button class="action-btn view" onclick="viewCode('${k.name}')">View Code</button>
+                <button class="action-btn" onclick="resetToken('${k.name}')">Reset Uses</button>
+                <button class="action-btn" onclick="resetHwid('${k.name}')">Reset HWID</button>
+                <button class="action-btn" onclick="resetLockout('${k.name}')">Unlock</button>
+                <button class="action-btn danger" onclick="deleteToken('${k.name}')">Delete</button>
             </td>
         `;
         tableBody.appendChild(tr);
@@ -162,6 +172,7 @@ async function createAccount() {
         const linkA = `${SITE_BASE}/?token=${data.buyerA.token}`;
         const linkB = `${SITE_BASE}/?token=${data.buyerB.token}`;
 
+        // Copy both links to clipboard
         const bothLinks = `Buyer A (${buyerAName}): ${linkA}\nBuyer B (${buyerBName}): ${linkB}`;
         copyToClipboard(bothLinks);
 
@@ -170,6 +181,7 @@ async function createAccount() {
             <strong>Buyer A (${buyerAName}):</strong> <a href="${linkA}" target="_blank" style="color:#FFD700;">${linkA}</a><br>
             <strong>Buyer B (${buyerBName}):</strong> <a href="${linkB}" target="_blank" style="color:#FFD700;">${linkB}</a>`;
 
+        // Clear form
         document.getElementById('newMsEmail').value = '';
         document.getElementById('newSecret').value = '';
         document.getElementById('buyerAName').value = '';
@@ -235,7 +247,8 @@ async function deleteToken(tokenId) {
 }
 
 // View a token's current TOTP code directly from the admin dashboard.
-// Does NOT affect the buyer's quota or cooldown — admin-only view.
+// Uses the /api/admin/view-code endpoint which bypasses HWID, cooldown, lockout.
+// DOES NOT affect the buyer's quota or cooldown — admin-only view.
 async function viewCode(tokenId) {
     try {
         const res = await fetch(`${API_BASE}/api/admin/view-code?token=${encodeURIComponent(tokenId)}`, {
