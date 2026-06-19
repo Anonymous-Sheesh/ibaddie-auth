@@ -693,6 +693,11 @@ body.admin-body {
     border-radius: 14px;
     border: 1px solid rgba(255, 255, 255, 0.08);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+    /* Prevent the table from pushing the whole page sideways on mobile.
+       The table can scroll horizontally INSIDE this container, but the
+       container itself never gets wider than its parent. */
+    max-width: 100%;
+    -webkit-overflow-scrolling: touch;  /* smooth scroll on iOS */
 }
 
 table {
@@ -701,7 +706,8 @@ table {
     text-align: left;
     background: rgba(0, 0, 0, 0.3);
     font-size: 0.88rem;
-    min-width: 800px;
+    /* Removed: min-width: 800px — was forcing horizontal scroll on mobile and
+       pushing the whole admin page left. Table now shrinks to fit. */
 }
 
 th, td {
@@ -709,6 +715,11 @@ th, td {
     border-bottom: 1px solid rgba(255, 255, 255, 0.05);
     color: #d0d0d8;
     vertical-align: top;
+    /* Critical: allow long emails to wrap inside the cell instead of
+       forcing the column wider (which causes horizontal scroll). */
+    word-break: break-word;
+    overflow-wrap: break-word;
+    hyphens: auto;
 }
 
 th {
@@ -840,13 +851,37 @@ td .meta-sub {
 
 /* ─── 9. RESPONSIVE ─────────────────────────────────────────────────────────── */
 
+/* Tablet and small desktop — slight adjustments */
+@media screen and (max-width: 768px) {
+    .admin-container {
+        max-width: 100%;
+        width: 100%;
+        margin: 10px auto;
+        padding: 1.5rem 1rem;
+    }
+
+    table {
+        font-size: 0.82rem;
+    }
+
+    th, td {
+        padding: 11px 10px;
+    }
+}
+
+/* Phone — major layout adjustments */
 @media screen and (max-width: 600px) {
     .glassmorphism {
         padding: 1.75rem 1.25rem;
+        border-radius: 18px;
     }
 
     .admin-container {
-        padding: 1.5rem 1.25rem;
+        max-width: 100%;
+        width: 100%;
+        margin: 0 auto;
+        padding: 1.25rem 0.85rem;
+        border-radius: 16px;
     }
 
     layflags-rolling-number {
@@ -884,28 +919,166 @@ td .meta-sub {
         font-size: 12px;
     }
 
-    /* Admin table on mobile — make action buttons wrap */
-    .action-btn {
-        font-size: 0.72rem;
-        padding: 5px 9px;
-        margin: 1px;
+    /* ─── Admin forms on phone ─── */
+    .admin-form input,
+    .admin-form button {
+        padding: 13px 14px;
+        font-size: 0.95rem;
+        /* Larger tap targets for fingers */
     }
 
-    th, td {
-        padding: 11px 10px;
-        font-size: 0.82rem;
+    .admin-form > div {
+        flex-direction: column !important;
+        gap: 10px !important;
     }
 
+    /* ─── Admin Tools card on phone ─── */
     .admin-tools-card {
-        padding: 14px;
+        padding: 12px 14px;
     }
 
     .admin-tools-card-body {
-        font-size: 0.8rem;
+        font-size: 0.78rem;
+        line-height: 1.55;
+    }
+
+    .admin-tools-card-body ol {
+        padding-left: 18px;
+    }
+
+    /* ─── Section headers ─── */
+    .section-divider {
+        margin: 1.5rem 0 1rem 0;
+        padding-top: 1rem;
+    }
+
+    .section-divider h3 {
+        font-size: 1.05rem;
+    }
+
+    /* ─── Token table on phone: stack as cards ───
+       On narrow screens, the table layout breaks because there are 7 columns
+       and each row has long email content. Instead of forcing horizontal scroll
+       (which makes the whole page slide left), we transform each row into a
+       card-like layout using CSS table→block conversion. Each <td> becomes a
+       row in the card with the column header shown as a label. */
+    .table-responsive {
+        border: none;
+        box-shadow: none;
+        background: transparent;
+    }
+
+    table, thead, tbody, th, td, tr {
+        display: block;
+    }
+
+    thead {
+        display: none;  /* hide column headers — we'll show them as inline labels */
+    }
+
+    tr {
+        background: rgba(25, 25, 35, 0.6);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 14px;
+        margin-bottom: 12px;
+        padding: 4px 0;
+        box-shadow: 0 6px 16px rgba(0,0,0,0.3);
+    }
+
+    tr:last-child {
+        margin-bottom: 0;
+    }
+
+    td {
+        padding: 8px 14px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+        font-size: 0.85rem;
+        text-align: left !important;
+        /* No more word-break needed since cells are full-width now */
+        word-break: normal;
+        overflow-wrap: normal;
+    }
+
+    td:last-child {
+        border-bottom: none;
+    }
+
+    /* Action buttons: wrap nicely on phone, big tap targets */
+    .action-btn {
+        font-size: 0.75rem;
+        padding: 7px 11px;
+        margin: 2px;
+        display: inline-block;
+    }
+
+    /* The "Actions" cell on phone: full row of buttons that wrap */
+    td:last-child {
+        padding-top: 10px;
+    }
+
+    /* Strong/labels in the user cell — bigger so they're readable */
+    td strong {
+        font-size: 1rem;
+        display: block;
+        margin-bottom: 4px;
+    }
+
+    .meta-sub {
+        display: block;
+        margin-top: 3px;
+        font-size: 0.78rem !important;
+    }
+
+    /* Status badges bigger on phone */
+    .badge-ok, .badge-locked {
+        display: inline-block;
+        padding: 3px 8px;
+        border-radius: 6px;
+        background: rgba(76, 175, 80, 0.15);
+    }
+
+    .badge-locked {
+        background: rgba(255, 76, 76, 0.15);
+    }
+
+    .hwid-yes, .hwid-no {
+        font-size: 1.2rem !important;
+    }
+
+    /* Back button and refresh button — bigger tap target */
+    .back-btn, .refresh-btn {
+        font-size: 0.9rem;
+        padding: 10px 14px;
+    }
+
+    /* Login form inputs on phone */
+    .password-container input {
+        padding: 13px 50px 13px 14px;
+    }
+
+    /* Discovery panel hash — smaller font so the long hash wraps on phone */
+    .discover-panel-hash {
+        font-size: 0.72rem;
+        padding: 10px 12px;
+    }
+
+    .discover-panel-help {
+        font-size: 0.75rem;
     }
 }
 
+/* Very small phones */
 @media screen and (max-width: 400px) {
+    .admin-container {
+        padding: 1rem 0.6rem;
+    }
+
+    .glassmorphism {
+        padding: 1.25rem 0.85rem;
+    }
+
     layflags-rolling-number {
         font-size: 40px;
         letter-spacing: 1px;
@@ -918,5 +1091,22 @@ td .meta-sub {
     .container {
         margin: 0.5rem;
         width: 95%;
+    }
+
+    .action-btn {
+        font-size: 0.72rem;
+        padding: 6px 10px;
+    }
+
+    td {
+        padding: 7px 11px;
+        font-size: 0.8rem;
+    }
+}
+
+/* Landscape phones — give the table more room but keep card layout */
+@media screen and (max-width: 900px) and (orientation: landscape) and (max-height: 500px) {
+    .admin-container {
+        padding: 1rem 1.25rem;
     }
 }
