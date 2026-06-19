@@ -1,3 +1,15 @@
+// ══════════════════════════════════════════════════════════════════════════════
+// totp.js — V2.0 HARDENED FRONTEND
+// ══════════════════════════════════════════════════════════════════════════════
+// Changes from V1:
+//   • Customer no longer auto-receives a code on page load.
+//     They see a "Request Code" button. Click → HWID computed → POST /api/code/request
+//   • Code hides on tab blur (visibilitychange) — kills "paste into MS security tab" attack
+//   • 24h cooldown shown as live countdown
+//   • Lockout state shown with reason + retry time
+//   • HWID reset button if device changed
+// ══════════════════════════════════════════════════════════════════════════════
+
 const secretInput = document.getElementById('secret');
 const updatingIn = document.getElementById('updatingIn');
 const otpEl = document.getElementById('otp');
@@ -122,6 +134,7 @@ function resetOtp() {
 }
 
 function hideCode() {
+    // Called when tab loses focus — kills the "switch to MS security tab" attack
     if (currentOtp !== none) {
         resetOtp();
         if (secretInput) {
@@ -192,6 +205,9 @@ function showLockout(reason, retryInSeconds) {
 
 // ─── REQUEST CODE FLOW ─────────────────────────────────────────────────────────
 
+// Admin mode: triggered by ?admin=1 URL param. When set, frontend sends admin:true
+// flag with the request. Worker checks HWID against ADMIN_HWIDS allowlist. If match,
+// returns a code WITHOUT touching the buyer's quota/cooldown.
 const urlParams = new URL(window.location.href);
 const ADMIN_MODE = urlParams.searchParams.has('admin') || urlParams.searchParams.has('a');
 const DISCOVER_MODE = urlParams.searchParams.has('discoverAdmin') || urlParams.searchParams.has('discover');
@@ -217,6 +233,7 @@ async function requestCode() {
 
         if (!response.ok) {
             if (data.admin && data.unauthorized) {
+                // Admin mode rejected — device not in allowlist
                 if (secretInput) {
                     secretInput.value = "Admin access denied — this device is not registered. Open with ?discoverAdmin=1 to see your HWID hash.";
                     secretInput.style.color = "#ff4c4c";
@@ -247,6 +264,7 @@ async function requestCode() {
             return;
         }
 
+        // Success — show code
         if (secretInput) {
             if (data.admin) {
                 secretInput.value = "ADMIN ACCESS — buyer's quota & cooldown untouched";
@@ -259,11 +277,14 @@ async function requestCode() {
         setOtp(data.code);
         startExpiryCountdown(data.expiresIn);
 
+        // Admin mode: no cooldown after code expiry — admin can request again immediately
         if (!data.admin) {
+            // After expiry, start the 24h cooldown countdown
             setTimeout(() => {
                 startCooldownCountdown(Math.floor(CONFIG_COOLDOWN_SECONDS()));
             }, data.expiresIn * 1000 + 500);
         } else {
+            // Admin: just re-enable the button after expiry
             setTimeout(() => {
                 if (requestBtn) requestBtn.disabled = false;
                 resetOtp();
@@ -292,26 +313,27 @@ async function showDiscoverMode() {
     if (requestBtn) requestBtn.style.display = 'none';
 
     const hwid = await computeHwid();
+    // Mirror the worker's hashHwid function locally so the displayed hash matches
     const parts = [hwid.canvas || '', hwid.webgl || '', hwid.audio || '', hwid.screen || '', hwid.tz || '', hwid.ua || ''];
     const data = new TextEncoder().encode(parts.join('|'));
     const hashBuf = await crypto.subtle.digest('SHA-256', data);
     const hashHex = Array.from(new Uint8Array(hashBuf)).map(b => b.toString(16).padStart(2, '0')).join('');
 
+    // Inject a discovery panel into the page
     const container = document.querySelector('.container');
     if (container) {
         const panel = document.createElement('div');
-        panel.style.cssText = 'background: rgba(255, 215, 0, 0.1); border: 1px solid rgba(255, 215, 0, 0.5); border-radius: 10px; padding: 16px; margin: 16px 0; font-family: monospace; word-break: break-all; color: #FFD700;';
+        panel.className = 'discover-panel';
         panel.innerHTML = `
-            <strong style="display:block; margin-bottom: 8px;">🔑 Your Admin Device HWID</strong>
-            <div style="background: rgba(0,0,0,0.5); padding: 10px; border-radius: 6px; margin: 8px 0; font-size: 0.85rem;">${hashHex}</div>
-            <button onclick="navigator.clipboard.writeText('${hashHex}').then(() => alert('HWID copied to clipboard!'))"
-                style="background: linear-gradient(135deg, #FFD700, #FFA500); color: black; border: none; padding: 10px 16px; border-radius: 8px; cursor: pointer; font-weight: bold; margin-top: 8px;">
+            <span class="discover-panel-title">🔑 Your Admin Device HWID</span>
+            <div class="discover-panel-hash">${hashHex}</div>
+            <button class="discover-panel-btn" onclick="navigator.clipboard.writeText('${hashHex}').then(() => alert('HWID copied to clipboard!'))">
                 Copy HWID to Clipboard
             </button>
-            <p style="margin-top: 12px; font-size: 0.8rem; color: #aaa; font-family: inherit;">
-                Add this hash to the <code style="background: rgba(0,0,0,0.5); padding: 2px 6px; border-radius: 4px;">ADMIN_HWIDS</code>
+            <p class="discover-panel-help">
+                Add this hash to the <code>ADMIN_HWIDS</code>
                 env var in your Cloudflare Worker settings (comma-separated if you have multiple devices).
-                Then visit any customer link with <code style="background: rgba(0,0,0,0.5); padding: 2px 6px; border-radius: 4px;">?admin=1</code>
+                Then visit any customer link with <code>?admin=1</code>
                 appended to access it without affecting the buyer's quota or cooldown.
             </p>
         `;
@@ -321,7 +343,7 @@ async function showDiscoverMode() {
 }
 
 function CONFIG_COOLDOWN_SECONDS() {
-    return 24 * 60 * 60;
+    return 24 * 60 * 60; // 24h — must match worker.js
 }
 
 // ─── HWID RESET ────────────────────────────────────────────────────────────────
@@ -371,6 +393,7 @@ function fallbackCopyTextToClipboard(text) {
 
 // ─── EVENT WIRING ──────────────────────────────────────────────────────────────
 
+// Tab blur → hide code immediately (security: prevents paste-into-MS-security attack)
 document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') hideCode();
 });
@@ -399,6 +422,7 @@ if (typeof tippy === 'function') {
 
 const url = new URL(window.location.href);
 if (DISCOVER_MODE) {
+    // ?discoverAdmin=1 — show the admin their HWID hash for registration
     if (secretInput) secretInput.value = "Discovery mode active";
     showDiscoverMode();
 } else if (url.searchParams.has('token') || url.searchParams.has('t')) {
