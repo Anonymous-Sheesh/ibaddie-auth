@@ -112,11 +112,22 @@ function renderTable(keys) {
             : `<span class="badge-ok">OK</span>`;
         const url = `${SITE_BASE}/?token=${k.name}`;
 
+        // Build the buyer info cell — shows buyer's email (the user field),
+        // the paired buyer's email if this is part of a 2-buyer account,
+        // and the MS account email if known.
+        const msEmailLine = meta.msEmail
+            ? `<span class="meta-sub" style="color:#a0a0b0;">MS: ${meta.msEmail}</span>`
+            : `<span class="meta-sub" style="color:#707080;">MS: not set</span>`;
+        const pairedLine = meta.pairedBuyer
+            ? `<span class="meta-sub" style="color:#8ec5fc;">Paired: ${meta.pairedBuyer}</span>`
+            : `<span class="meta-sub" style="color:#707080;">Paired: none</span>`;
+
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>
                 <strong>${user}</strong><br>
-                <span class="meta-sub">${meta.msEmail || 'no MS email'}</span>
+                ${msEmailLine}<br>
+                ${pairedLine}
             </td>
             <td>${uses}/1</td>
             <td style="text-align:center;">${hwidBound}</td>
@@ -207,6 +218,7 @@ async function createAccount() {
 async function createToken() {
     const user = document.getElementById('singleUsername').value.trim();
     const secret = document.getElementById('singleSecret').value.trim();
+    const msEmail = document.getElementById('singleMsEmail') ? document.getElementById('singleMsEmail').value.trim() : '';
     if (!user || !secret) {
         dashboardMsg.style.color = "#ff4c4c";
         dashboardMsg.textContent = "Both Username and Secret required.";
@@ -221,12 +233,13 @@ async function createToken() {
                 'Authorization': adminAuthToken,
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ user, secret })
+            body: JSON.stringify({ user, secret, msEmail: msEmail || undefined })
         });
         if (!res.ok) throw new Error("Failed to create token");
         const data = await res.json();
         document.getElementById('singleUsername').value = '';
         document.getElementById('singleSecret').value = '';
+        if (document.getElementById('singleMsEmail')) document.getElementById('singleMsEmail').value = '';
         const fullUrl = `${SITE_BASE}/?token=${data.token}`;
         copyToClipboard(fullUrl);
         dashboardMsg.style.color = "#4CAF50";
@@ -314,7 +327,7 @@ async function resetHwid(tokenId) {
 }
 
 async function resetLockout(tokenId) {
-    if (!confirm("Clear lockout and re-enable this token?")) return;
+    if (!confirm("Clear lockout and fully reset this token? This clears the lockout, offense count, and request history — the next lockout will be 3 days again (no escalation).")) return;
     try {
         const res = await fetch(`${API_BASE}/api/admin/reset-lockout`, {
             method: 'POST',
@@ -322,6 +335,12 @@ async function resetLockout(tokenId) {
             body: JSON.stringify({ token: tokenId })
         });
         if (!res.ok) throw new Error("Failed to clear lockout");
+        const data = await res.json();
+        dashboardMsg.style.color = "#4CAF50";
+        dashboardMsg.textContent = data.fullyReset
+            ? "✅ Token fully unlocked — offense history cleared. Next lockout will be 3 days again."
+            : "✅ Token unlocked.";
+        setTimeout(() => { if (dashboardMsg.textContent.startsWith("✅")) dashboardMsg.textContent = ""; }, 5000);
         fetchList();
     } catch (e) { alert("Error: " + e.message); }
 }
