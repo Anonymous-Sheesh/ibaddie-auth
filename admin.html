@@ -12,166 +12,6 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;500;700&display=swap" rel="stylesheet">
-
-    <style>
-        body.admin-body {
-            overflow-y: auto !important;
-            min-height: 100vh;
-            padding-bottom: 60px;
-        }
-
-        .admin-container {
-            max-width: 1100px;
-            width: 95%;
-            margin-top: 40px;
-            margin-bottom: 40px;
-            padding: 30px;
-        }
-
-        .login-section,
-        .dashboard-section { display: none; }
-        .login-section.active,
-        .dashboard-section.active { display: block; }
-
-        .admin-form {
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-            margin-bottom: 25px;
-        }
-
-        .admin-form input,
-        .admin-form button {
-            padding: 15px;
-            border-radius: 12px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            font-family: inherit;
-            font-size: 1rem;
-        }
-
-        .admin-form input {
-            background: rgba(0, 0, 0, 0.5);
-            color: white;
-        }
-
-        .admin-form button {
-            background: linear-gradient(135deg, #FFD700, #FFA500);
-            color: black;
-            font-weight: bold;
-            cursor: pointer;
-            transition: transform 0.2s, opacity 0.2s;
-        }
-
-        .admin-form button:hover { transform: translateY(-2px); opacity: 0.9; }
-        .admin-form button.danger {
-            background: linear-gradient(135deg, #ff4c4c, #c00000);
-            color: white;
-        }
-
-        .back-btn {
-            display: inline-flex;
-            align-items: center;
-            color: #ddd;
-            text-decoration: none;
-            margin-bottom: 20px;
-            font-size: 0.9rem;
-            transition: color 0.2s;
-        }
-        .back-btn:hover { color: #fff; }
-
-        .password-container {
-            position: relative;
-            display: flex;
-            align-items: center;
-            width: 100%;
-        }
-
-        .password-container input {
-            width: 100%;
-            padding: 15px;
-            padding-right: 45px;
-            margin: 0;
-            box-sizing: border-box;
-        }
-
-        .toggle-password {
-            position: absolute;
-            right: 15px;
-            top: 50%;
-            margin-top: -10px;
-            cursor: pointer;
-            color: rgba(255, 255, 255, 0.6);
-            transition: color 0.2s;
-        }
-        .toggle-password:hover { color: rgba(255, 255, 255, 1); }
-
-        .table-responsive {
-            overflow-x: auto;
-            border-radius: 12px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            text-align: left;
-            background: rgba(0, 0, 0, 0.3);
-            font-size: 0.85rem;
-        }
-
-        th, td {
-            padding: 12px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-            color: #ddd;
-            vertical-align: top;
-        }
-
-        th {
-            background: rgba(255, 255, 255, 0.05);
-            color: #fff;
-            font-weight: bold;
-        }
-
-        .action-btn {
-            background: rgba(255, 215, 0, 0.15);
-            color: #FFD700;
-            border: 1px solid rgba(255, 215, 0, 0.4);
-            padding: 5px 9px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 0.75rem;
-            transition: all 0.2s;
-            margin: 1px;
-        }
-        .action-btn:hover { background: rgba(255, 215, 0, 0.3); }
-        .action-btn.danger {
-            background: rgba(255, 76, 76, 0.2);
-            color: #ff4c4c;
-            border-color: rgba(255, 76, 76, 0.5);
-        }
-        .action-btn.danger:hover { background: rgba(255, 76, 76, 0.4); }
-
-        .copy-link {
-            color: #FFD700;
-            text-decoration: none;
-            cursor: pointer;
-        }
-        .copy-link:hover { text-decoration: underline; }
-
-        #errorMsg, #dashboardMsg {
-            color: #ff4c4c;
-            margin-bottom: 10px;
-            font-size: 0.9rem;
-            font-weight: 500;
-        }
-        #dashboardMsg, #successMsg { color: #4CAF50; }
-
-        .section-divider {
-            border-top: 1px solid rgba(255,255,255,0.1);
-            margin: 30px 0 20px 0;
-            padding-top: 20px;
-        }
-    </style>
 </head>
 
 <body class="admin-body">
@@ -210,15 +50,15 @@
             <p id="dashboardMsg"></p>
 
             <!-- ADMIN TOOLS -->
-            <div style="background: rgba(255, 215, 0, 0.08); border: 1px solid rgba(255, 215, 0, 0.3); border-radius: 10px; padding: 12px 16px; margin-bottom: 20px;">
-                <strong style="color: #FFD700;">🔧 Admin Tools</strong>
-                <div style="margin-top: 8px; font-size: 0.85rem; color: #ddd; line-height: 1.6;">
+            <div class="admin-tools-card">
+                <span class="admin-tools-card-title">🔧 Admin Tools</span>
+                <div class="admin-tools-card-body">
                     To test customer links without affecting their quota/cooldown:
-                    <ol style="margin: 8px 0; padding-left: 20px;">
-                        <li>Open <a href="./index.html?discoverAdmin=1" target="_blank" style="color: #FFD700;">this discovery page</a> on each of your devices (laptop, phone)</li>
+                    <ol>
+                        <li>Open <a href="./index.html?discoverAdmin=1" target="_blank">this discovery page</a> on each of your devices (laptop, phone)</li>
                         <li>Copy the HWID hash it shows</li>
-                        <li>Add it to the <code style="background: rgba(0,0,0,0.5); padding: 2px 6px; border-radius: 4px;">ADMIN_HWIDS</code> env var in your Cloudflare Worker (comma-separated)</li>
-                        <li>Then access any customer link with <code style="background: rgba(0,0,0,0.5); padding: 2px 6px; border-radius: 4px;">&admin=1</code> appended — your access won't affect the buyer</li>
+                        <li>Add it to the <code>ADMIN_HWIDS</code> env var in your Cloudflare Worker (comma-separated)</li>
+                        <li>Then access any customer link with <code>&amp;admin=1</code> appended — your access won't affect the buyer</li>
                     </ol>
                     You can also click <strong>View Code</strong> on any token below to see its current code without leaving this dashboard.
                 </div>
@@ -238,7 +78,7 @@
             </div>
 
             <div class="section-divider">
-                <h3 style="color: white; margin-bottom: 10px;">Create Single Token (Legacy)</h3>
+                <h3>Create Single Token (Legacy)</h3>
                 <div class="admin-form">
                     <input type="text" id="singleUsername" placeholder="Customer or Account Username">
                     <input type="text" id="singleSecret" placeholder="Microsoft Base32 Secret Key (e.g. JBSW...)">
@@ -247,9 +87,8 @@
             </div>
 
             <div class="section-divider">
-                <h3 style="color: white; margin: 0 0 10px 0;">Active Tokens</h3>
-                <button onclick="fetchList()"
-                    style="margin-bottom:15px; background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2); color:white; padding:8px 12px; border-radius:8px; cursor:pointer;">Refresh List</button>
+                <h3 style="margin: 0 0 10px 0;">Active Tokens</h3>
+                <button onclick="fetchList()" class="refresh-btn">Refresh List</button>
 
                 <div class="table-responsive">
                     <table>
