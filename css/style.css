@@ -34,8 +34,7 @@ html {
     height: auto;
     min-height: 100vh;
     position: relative;
-    overflow-y: auto;
-    overflow-x: hidden;
+    /* Let the body handle scrolling — don't set overflow here, or we get double scrollbars */
 }
 
 body {
@@ -455,6 +454,8 @@ body.admin-body {
     align-items: initial !important;
     justify-content: initial !important;
     margin: 0 !important;
+    /* Single source of scroll: html stays static, body scrolls.
+       This prevents the double-scrollbar issue. */
 }
 
 .admin-container {
