@@ -49,7 +49,7 @@ async function attemptLogin() {
 
 async function fetchList() {
     if (!tableBody) return;
-    tableBody.innerHTML = `<tr><td colspan="7" style="text-align:center;">Loading...</td></tr>`;
+    tableBody.innerHTML = `<tr><td colspan="6" style="text-align:center;">Loading...</td></tr>`;
     dashboardMsg.textContent = "";
     try {
         const res = await fetch(`${API_BASE}/api/admin/list`, {
@@ -88,11 +88,10 @@ function formatLockout(until) {
 function renderTable(keys) {
     if (!tableBody) return;
     if (keys.length === 0) {
-        tableBody.innerHTML = `<tr><td colspan="7" style="text-align:center;">No active tokens. Create one above!</td></tr>`;
+        tableBody.innerHTML = `<tr><td colspan="6" style="text-align:center;">No active tokens. Create one above!</td></tr>`;
         return;
     }
     // Sort by createdAt descending — newest accounts at top, oldest at bottom.
-    // Tokens without createdAt (legacy) get 0 and sink to the bottom.
     const sortedKeys = [...keys].sort((a, b) => {
         const aTime = (a.metadata && a.metadata.createdAt) || 0;
         const bTime = (b.metadata && b.metadata.createdAt) || 0;
@@ -103,14 +102,17 @@ function renderTable(keys) {
         const meta = k.metadata || {};
         const user = meta.user || "Unknown";
         const uses = meta.usesLeft !== undefined ? meta.usesLeft : "?";
-        const locked = meta.lockoutUntil && meta.lockoutUntil > Date.now();
-        const hwidBound = meta.hwidBound
-            ? `<span class="hwid-yes" title="Device bound">✅</span>`
-            : `<span class="hwid-no" title="No device bound yet">❌</span>`;
-        const lockoutStatus = locked
-            ? `<span class="badge-locked">LOCKED<br><span style="font-size:0.7rem; font-weight:400;">(${formatLockout(meta.lockoutUntil)})</span></span>`
-            : `<span class="badge-ok">OK</span>`;
+        const deviceCount = meta.deviceCount || 0;
+        const lockedDeviceCount = meta.lockedDeviceCount || 0;
         const url = `${SITE_BASE}/?token=${k.name}`;
+
+        // Devices column: shows total devices + how many are currently locked
+        const devicesDisplay = deviceCount === 0
+            ? `<span class="meta-sub" style="color:#707080;">No devices yet</span>`
+            : `<strong>${deviceCount}</strong> device${deviceCount === 1 ? '' : 's'}` +
+              (lockedDeviceCount > 0
+                  ? `<br><span class="badge-locked">${lockedDeviceCount} locked</span>`
+                  : `<br><span class="badge-ok">none locked</span>`);
 
         // Build the buyer info cell — shows buyer's email (the user field),
         // the paired buyer's email if this is part of a 2-buyer account,
@@ -130,8 +132,7 @@ function renderTable(keys) {
                 ${pairedLine}
             </td>
             <td>${uses}/1</td>
-            <td style="text-align:center;">${hwidBound}</td>
-            <td>${lockoutStatus}</td>
+            <td>${devicesDisplay}</td>
             <td>
                 <span class="meta-sub">Last: ${formatTimeAgo(meta.lastIssuedAt)}</span>
             </td>
@@ -139,7 +140,6 @@ function renderTable(keys) {
             <td>
                 <button class="action-btn view" onclick="viewCode('${k.name}')">View Code</button>
                 <button class="action-btn" onclick="resetToken('${k.name}')">Reset Uses</button>
-                <button class="action-btn" onclick="resetHwid('${k.name}')">Reset HWID</button>
                 <button class="action-btn" onclick="resetLockout('${k.name}')">Unlock</button>
                 <button class="action-btn danger" onclick="deleteToken('${k.name}')">Delete</button>
             </td>
@@ -298,7 +298,7 @@ async function viewCode(tokenId) {
 }
 
 async function resetToken(tokenId) {
-    if (!confirm("Reset uses back to 1/1?")) return;
+    if (!confirm("FULL RESET: Clear ALL device data on this token? Every device gets a fresh 2-code allowance immediately. All device lockouts are also cleared. Use this when a customer messages you saying they're locked out.")) return;
     try {
         const res = await fetch(`${API_BASE}/api/admin/reset-token`, {
             method: 'POST',
@@ -306,40 +306,30 @@ async function resetToken(tokenId) {
             body: JSON.stringify({ token: tokenId })
         });
         if (!res.ok) throw new Error("Failed to reset");
-        fetchList();
-    } catch (e) { alert("Error: " + e.message); }
-}
-
-async function resetHwid(tokenId) {
-    if (!confirm("Reset HWID binding? This allows the customer to log in from a new device. Allowed once every 7 days.")) return;
-    try {
-        const res = await fetch(`${API_BASE}/api/admin/reset-hwid`, {
-            method: 'POST',
-            headers: { 'Authorization': adminAuthToken, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token: tokenId })
-        });
-        if (!res.ok) {
-            const err = await res.json().catch(() => ({}));
-            throw new Error(err.error || "Failed to reset HWID");
-        }
+        const data = await res.json();
+        dashboardMsg.style.color = "#4CAF50";
+        dashboardMsg.textContent = data.fullyReset
+            ? "✅ Token fully reset — all device data cleared. Every device gets fresh 2 codes."
+            : "✅ Token reset.";
+        setTimeout(() => { if (dashboardMsg.textContent.startsWith("✅")) dashboardMsg.textContent = ""; }, 5000);
         fetchList();
     } catch (e) { alert("Error: " + e.message); }
 }
 
 async function resetLockout(tokenId) {
-    if (!confirm("Clear lockout and fully reset this token? This clears the lockout, offense count, and request history — the next lockout will be 3 days again (no escalation).")) return;
+    if (!confirm("Clear all device lockouts on this token? Device code counts are preserved — locked devices can immediately request again, but devices that already used 2 codes today still need to wait for the 24h count reset.")) return;
     try {
         const res = await fetch(`${API_BASE}/api/admin/reset-lockout`, {
             method: 'POST',
             headers: { 'Authorization': adminAuthToken, 'Content-Type': 'application/json' },
             body: JSON.stringify({ token: tokenId })
         });
-        if (!res.ok) throw new Error("Failed to clear lockout");
+        if (!res.ok) throw new Error("Failed to clear lockouts");
         const data = await res.json();
         dashboardMsg.style.color = "#4CAF50";
         dashboardMsg.textContent = data.fullyReset
-            ? "✅ Token fully unlocked — offense history cleared. Next lockout will be 3 days again."
-            : "✅ Token unlocked.";
+            ? "✅ All device lockouts cleared. Devices can request again immediately."
+            : "✅ Lockouts cleared.";
         setTimeout(() => { if (dashboardMsg.textContent.startsWith("✅")) dashboardMsg.textContent = ""; }, 5000);
         fetchList();
     } catch (e) { alert("Error: " + e.message); }
@@ -378,7 +368,6 @@ window.createToken = createToken;
 window.deleteToken = deleteToken;
 window.viewCode = viewCode;
 window.resetToken = resetToken;
-window.resetHwid = resetHwid;
 window.resetLockout = resetLockout;
 window.copyToClipboard = copyToClipboard;
 window.togglePassword = togglePassword;
