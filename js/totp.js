@@ -16,7 +16,6 @@ const otpEl = document.getElementById('otp');
 const requestBtn = document.getElementById('requestBtn');
 const cooldownEl = document.getElementById('cooldown');
 const lockoutEl = document.getElementById('lockout');
-const resetHwidBtn = document.getElementById('resetHwidBtn');
 
 if (secretInput) secretInput.value = "Booting up...";
 
@@ -197,10 +196,10 @@ function showLockout(reason, retryInSeconds) {
         const h = Math.floor(retryInSeconds / 3600);
         const m = Math.floor((retryInSeconds % 3600) / 60);
         lockoutEl.innerHTML = `
-            <strong>🔒 Account locked for 3 days</strong>
+            <strong>🔒 Device locked for 24 hours</strong>
             <div style="margin-top: 8px; font-size: 0.85rem; line-height: 1.55;">
-                ${reason || 'Security precautions.'}<br><br>
-                <em>This is for security precautions. You should only need a code once or twice to log in to the launcher — any more is a risk to the account. If this is an issue, purchase full access via custom order by messaging Ibaddie. You can ask for codes after 3 days again.</em>
+                ${reason || 'Daily code limit reached.'}<br><br>
+                <em>This is for security precautions. You should only need a code once or twice to log in to the launcher — any more is a risk to the account. If this is an issue, purchase full access via custom order by messaging Ibaddie. You can ask for codes after 24h again.</em>
             </div>
             <div style="margin-top: 10px; font-size: 0.8rem; color: #ffaaaa;">
                 ⏳ Retry in <strong style="color: #ff4c4c;">${h}h ${m}m</strong>
@@ -208,7 +207,8 @@ function showLockout(reason, retryInSeconds) {
         `;
     }
     if (requestBtn) requestBtn.disabled = true;
-    if (resetHwidBtn) resetHwidBtn.style.display = 'inline-block';
+    // Don't show the HWID reset button anymore — there's no HWID binding to reset.
+    // Customer must wait 24h or contact Ibaddie to reset uses.
 }
 
 // ─── REQUEST CODE FLOW ─────────────────────────────────────────────────────────
@@ -241,7 +241,6 @@ async function requestCode() {
 
         if (!response.ok) {
             if (data.admin && data.unauthorized) {
-                // Admin mode rejected — device not in allowlist
                 if (secretInput) {
                     secretInput.value = "Admin access denied — this device is not registered. Open with ?discoverAdmin=1 to see your HWID hash.";
                     secretInput.style.color = "#ff4c4c";
@@ -252,7 +251,7 @@ async function requestCode() {
             if (data.locked) {
                 const retryIn = data.retryInSeconds || Math.ceil(((data.lockoutUntil || 0) - Date.now()) / 1000);
                 showLockout(data.lockoutReason || data.error, retryIn);
-                if (secretInput) secretInput.value = "Account locked.";
+                if (secretInput) secretInput.value = "Device locked for 24h.";
                 return;
             }
             if (secretInput) {
@@ -263,20 +262,21 @@ async function requestCode() {
             return;
         }
 
-        if (data.cooldown) {
-            startCooldownCountdown(data.retryInSeconds);
-            if (secretInput) {
-                secretInput.value = "Cooldown active — see timer below.";
-                secretInput.style.color = "";
-            }
-            return;
-        }
-
         // Success — show code
         if (secretInput) {
             if (data.admin) {
                 secretInput.value = "ADMIN ACCESS — buyer's quota & cooldown untouched";
                 secretInput.style.color = "#FFD700";
+            } else if (data.codesRemainingToday !== undefined) {
+                const remaining = data.codesRemainingToday;
+                const limit = data.dailyLimit || 2;
+                if (remaining === 0) {
+                    secretInput.value = `Code shown — daily limit reached (${limit}/${limit}). Next request will lock this device for 24h.`;
+                    secretInput.style.color = "#FFD700";
+                } else {
+                    secretInput.value = `Access Token Active... (${remaining} code${remaining === 1 ? '' : 's'} left today)`;
+                    secretInput.style.color = "";
+                }
             } else {
                 secretInput.value = "Access Token Active...";
                 secretInput.style.color = "";
@@ -285,23 +285,22 @@ async function requestCode() {
         setOtp(data.code);
         startExpiryCountdown(data.expiresIn);
 
-        // Admin mode: no cooldown after code expiry — admin can request again immediately
-        if (!data.admin) {
-            // After expiry, start the 24h cooldown countdown
-            setTimeout(() => {
-                startCooldownCountdown(Math.floor(CONFIG_COOLDOWN_SECONDS()));
-            }, data.expiresIn * 1000 + 500);
-        } else {
-            // Admin: just re-enable the button after expiry
-            setTimeout(() => {
-                if (requestBtn) requestBtn.disabled = false;
-                resetOtp();
-                if (secretInput) {
+        // After code expires, re-enable the Request button (no global cooldown anymore —
+        // the per-device count is tracked server-side)
+        setTimeout(() => {
+            if (requestBtn) requestBtn.disabled = false;
+            resetOtp();
+            if (secretInput) {
+                if (data.admin) {
                     secretInput.value = "Admin code expired. Click Request Code again.";
-                    secretInput.style.color = "";
+                } else if (data.codesRemainingToday === 0) {
+                    secretInput.value = "Daily limit reached — next request will lock this device for 24h.";
+                } else {
+                    secretInput.value = "Code expired. Click Request Code again.";
                 }
-            }, data.expiresIn * 1000 + 500);
-        }
+                secretInput.style.color = "";
+            }
+        }, data.expiresIn * 1000 + 500);
     } catch (e) {
         if (secretInput) {
             secretInput.value = "Network error: " + e.message;
@@ -354,21 +353,9 @@ function CONFIG_COOLDOWN_SECONDS() {
     return 24 * 60 * 60; // 24h — must match worker.js
 }
 
-// ─── HWID RESET ────────────────────────────────────────────────────────────────
-
-async function requestHwidReset() {
-    // Customer-side HWID reset is intentionally NOT an API call.
-    // The /api/admin/reset-hwid endpoint requires admin auth (which customers
-    // don't have). Customers must contact Ibaddie to request a device reset —
-    // Ibaddie then clicks "Reset HWID" in the admin dashboard (no cooldown for admins).
-    if (!token) return;
-    alert(
-        "Need to switch devices?\n\n" +
-        "Please contact Ibaddie to request a device reset.\n" +
-        "Once Ibaddie approves it, come back to this page on your new device and click Request Code.\n\n" +
-        "This is a security measure — device binding can only be reset by the account seller to prevent URL sharing."
-    );
-}
+// ─── HWID RESET (REMOVED) ────────────────────────────────────────────────────
+// No more HWID binding — customers don't need a device reset button anymore.
+// Per-device 2-code-per-24h limit replaces the old HWID binding model.
 
 // ─── CLIPBOARD ─────────────────────────────────────────────────────────────────
 
@@ -399,7 +386,6 @@ window.addEventListener('blur', hideCode);
 
 if (otpEl) otpEl.addEventListener('click', () => copyTextToClipboard(currentOtp));
 if (requestBtn) requestBtn.addEventListener('click', requestCode);
-if (resetHwidBtn) resetHwidBtn.addEventListener('click', requestHwidReset);
 
 if (typeof tippy === 'function') {
     tippy('#otp', {
