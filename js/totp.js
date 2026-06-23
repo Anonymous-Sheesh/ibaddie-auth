@@ -303,12 +303,9 @@ async function requestCode() {
                 });
                 const freshData = await freshResponse.json();
                 if (freshResponse.ok && freshData.code) {
-                    // Use the fresh code
+                    // Use the fresh code — worker returns expiresIn: 30 for fresh codes
                     data.code = freshData.code;
-                    // Force expiresIn to 30 — we just entered a new window, so the code
-                    // has a full 30 seconds. The server may return 28-29 due to the 2s
-                    // margin we waited, but the customer should see a full 30s countdown.
-                    data.expiresIn = 30;
+                    data.expiresIn = freshData.expiresIn;
                 }
                 // If fresh fetch failed, use the original code (it's still valid for whatever time remains)
             } catch (e) {
