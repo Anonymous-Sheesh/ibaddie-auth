@@ -261,14 +261,20 @@ async function requestCode() {
         // 30s window starts so the customer always gets a full 30s to use the code.
         const minWindowForFreshCode = 30;  // require at least 30s
         if (data.expiresIn < minWindowForFreshCode && !data.admin) {
-            const waitSeconds = data.expiresIn + 1;  // +1 to land on the new window
+            const waitSeconds = data.expiresIn + 2;  // +2 to safely land on the new window
+            // Stop any existing expiry countdown timer
+            if (codeExpiryTimer) { clearInterval(codeExpiryTimer); codeExpiryTimer = null; }
+            // Set the "expires in" display to NA — only the "Showing code in..." text should show
+            if (updatingIn) updatingIn.textContent = "NA";
+            // Reset any visible code
+            resetOtp();
+            // Show the "Showing code in X..." message in red
             if (secretInput) {
                 secretInput.value = `Showing code in ${waitSeconds}...`;
                 secretInput.style.color = "#ff4c4c";
             }
             // Live countdown "Showing code in X..."
             let countdown = waitSeconds;
-            if (updatingIn) updatingIn.textContent = String(countdown);
             const waitTimer = setInterval(() => {
                 countdown--;
                 if (countdown <= 0) {
@@ -276,7 +282,7 @@ async function requestCode() {
                     return;
                 }
                 if (secretInput) secretInput.value = `Showing code in ${countdown}...`;
-                if (updatingIn) updatingIn.textContent = String(countdown);
+                if (updatingIn) updatingIn.textContent = "NA";
             }, 1000);
 
             // Wait for the next window, then request the fresh code
