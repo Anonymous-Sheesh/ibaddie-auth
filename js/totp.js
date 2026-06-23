@@ -274,6 +274,8 @@ async function requestCode() {
                 secretInput.style.color = "#ff4c4c";
             }
             // Live countdown "Showing code in X..."
+            // IMPORTANT: Keep #updatingIn at "NA" the entire time — do NOT let it count down.
+            // Only the secretInput (red text) counts down.
             let countdown = waitSeconds;
             const waitTimer = setInterval(() => {
                 countdown--;
@@ -282,6 +284,7 @@ async function requestCode() {
                     return;
                 }
                 if (secretInput) secretInput.value = `Showing code in ${countdown}...`;
+                // Force #updatingIn to stay at "NA" — the expires-in timer is NOT running
                 if (updatingIn) updatingIn.textContent = "NA";
             }, 1000);
 
@@ -299,13 +302,15 @@ async function requestCode() {
                     body: JSON.stringify({ token, hwid })
                 });
                 const freshData = await freshResponse.json();
-                if (freshResponse.ok && freshData.code && freshData.expiresIn >= minWindowForFreshCode) {
+                if (freshResponse.ok && freshData.code) {
                     // Use the fresh code
                     data.code = freshData.code;
-                    data.expiresIn = freshData.expiresIn;
+                    // Force expiresIn to 30 — we just entered a new window, so the code
+                    // has a full 30 seconds. The server may return 28-29 due to the 2s
+                    // margin we waited, but the customer should see a full 30s countdown.
+                    data.expiresIn = 30;
                 }
-                // If fresh fetch failed or returned short window, use the original code
-                // (it's still valid for whatever time remains)
+                // If fresh fetch failed, use the original code (it's still valid for whatever time remains)
             } catch (e) {
                 // Network error on re-fetch — fall back to original code
             }
