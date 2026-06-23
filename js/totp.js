@@ -257,9 +257,9 @@ async function requestCode() {
         }
 
         // Success — but wait for a fresh 30s window before showing the code.
-        // If the server returns a code with <30s left, we wait until the next
-        // 30s window starts so the customer always gets a full 30s to use the code.
-        const minWindowForFreshCode = 30;  // require at least 30s
+        // If the server returns a code with <25s left, we wait until the next
+        // 30s window starts so the customer always gets a full 25-30s to use the code.
+        const minWindowForFreshCode = 25;  // require at least 25s
         if (data.expiresIn < minWindowForFreshCode && !data.admin) {
             const waitSeconds = data.expiresIn + 2;  // +2 to safely land on the new window
             // Stop any existing expiry countdown timer
