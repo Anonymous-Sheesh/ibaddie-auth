@@ -133,14 +133,8 @@ function resetOtp() {
 }
 
 function hideCode() {
-    // Called when tab loses focus — kills the "switch to MS security tab" attack
-    if (currentOtp !== none) {
-        resetOtp();
-        if (secretInput) {
-            secretInput.value = "Code hidden — tab lost focus. Click Request Code again.";
-            secretInput.style.color = "#ff4c4c";
-        }
-    }
+    // Tab-blur hiding removed — only 1 code per 24h, no need to hide.
+    // Function kept as no-op for backward compat (event listeners removed below).
 }
 
 // ─── TIMER ─────────────────────────────────────────────────────────────────────
@@ -262,6 +256,55 @@ async function requestCode() {
             return;
         }
 
+        // Success — but wait for a fresh 30s window before showing the code.
+        // If the server returns a code with <30s left, we wait until the next
+        // 30s window starts so the customer always gets a full 30s to use the code.
+        const minWindowForFreshCode = 30;  // require at least 30s
+        if (data.expiresIn < minWindowForFreshCode && !data.admin) {
+            const waitSeconds = data.expiresIn + 1;  // +1 to land on the new window
+            if (secretInput) {
+                secretInput.value = `Showing code in ${waitSeconds}...`;
+                secretInput.style.color = "#ff4c4c";
+            }
+            // Live countdown "Showing code in X..."
+            let countdown = waitSeconds;
+            if (updatingIn) updatingIn.textContent = String(countdown);
+            const waitTimer = setInterval(() => {
+                countdown--;
+                if (countdown <= 0) {
+                    clearInterval(waitTimer);
+                    return;
+                }
+                if (secretInput) secretInput.value = `Showing code in ${countdown}...`;
+                if (updatingIn) updatingIn.textContent = String(countdown);
+            }, 1000);
+
+            // Wait for the next window, then request the fresh code
+            await new Promise(r => setTimeout(r, waitSeconds * 1000));
+            clearInterval(waitTimer);
+
+            // Re-request the code — server will return the new 30s window's code.
+            // The device count was already incremented on the first request, so this
+            // re-fetch doesn't consume another allowance (anti-replay logic in worker).
+            try {
+                const freshResponse = await fetch(`${API_BASE}/api/code/request`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token, hwid })
+                });
+                const freshData = await freshResponse.json();
+                if (freshResponse.ok && freshData.code && freshData.expiresIn >= minWindowForFreshCode) {
+                    // Use the fresh code
+                    data.code = freshData.code;
+                    data.expiresIn = freshData.expiresIn;
+                }
+                // If fresh fetch failed or returned short window, use the original code
+                // (it's still valid for whatever time remains)
+            } catch (e) {
+                // Network error on re-fetch — fall back to original code
+            }
+        }
+
         // Success — show code
         if (secretInput) {
             if (data.admin) {
@@ -378,11 +421,8 @@ function fallbackCopyTextToClipboard(text) {
 
 // ─── EVENT WIRING ──────────────────────────────────────────────────────────────
 
-// Tab blur → hide code immediately (security: prevents paste-into-MS-security attack)
-document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') hideCode();
-});
-window.addEventListener('blur', hideCode);
+// Tab-blur listeners removed — only 1 code per 24h, no need to hide on tab switch.
+// Code stays visible until it expires (30s window).
 
 if (otpEl) otpEl.addEventListener('click', () => copyTextToClipboard(currentOtp));
 if (requestBtn) requestBtn.addEventListener('click', requestCode);
