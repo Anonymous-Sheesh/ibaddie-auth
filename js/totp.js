@@ -196,7 +196,7 @@ function showLockout(reason, retryInSeconds) {
         const h = Math.floor(retryInSeconds / 3600);
         const m = Math.floor((retryInSeconds % 3600) / 60);
         lockoutEl.innerHTML = `
-            <strong>🔒 Device locked for 24 hours</strong>
+            <strong>🔒 IP address locked for 24 hours</strong>
             <div style="margin-top: 8px; font-size: 0.85rem; line-height: 1.55;">
                 ${reason || 'Daily code limit reached.'}<br><br>
                 <em>This is for security precautions. You should only need a code once or twice to log in to the launcher — any more is a risk to the account. If this is an issue, purchase full access via custom order by messaging Ibaddie. You can ask for codes after 24h again.</em>
@@ -251,7 +251,7 @@ async function requestCode() {
             if (data.locked) {
                 const retryIn = data.retryInSeconds || Math.ceil(((data.lockoutUntil || 0) - Date.now()) / 1000);
                 showLockout(data.lockoutReason || data.error, retryIn);
-                if (secretInput) secretInput.value = "Device locked for 24h.";
+                if (secretInput) secretInput.value = "IP address locked for 24h.";
                 return;
             }
             if (secretInput) {
@@ -269,7 +269,7 @@ async function requestCode() {
                 secretInput.style.color = "#FFD700";
             } else if (data.codesRemainingToday !== undefined) {
                 const remaining = data.codesRemainingToday;
-                const limit = data.dailyLimit || 2;
+                const limit = data.dailyLimit || 1;
                 if (remaining === 0) {
                     secretInput.value = `Code shown — daily limit reached (${limit}/${limit}). Next request will lock this device for 24h.`;
                     secretInput.style.color = "#FFD700";
@@ -355,7 +355,7 @@ function CONFIG_COOLDOWN_SECONDS() {
 
 // ─── HWID RESET (REMOVED) ────────────────────────────────────────────────────
 // No more HWID binding — customers don't need a device reset button anymore.
-// Per-device 2-code-per-24h limit replaces the old HWID binding model.
+// Per-device 1-code-per-24h limit replaces the old HWID binding model.
 
 // ─── CLIPBOARD ─────────────────────────────────────────────────────────────────
 
