@@ -43,7 +43,12 @@ function login() {
             } else if (r.status === 401) {
                 showErr("Wrong password");
             } else {
-                showErr("Server error (status " + r.status + ") — check Cloudflare KV limits or try again later");
+                // Show the actual server error message
+                r.json().then(d => {
+                    showErr("Server error: " + (d.error || "status " + r.status));
+                }).catch(() => {
+                    showErr("Server error (status " + r.status + ")");
+                });
             }
         })
         .catch(() => showErr("Network error — is the worker online?"));
