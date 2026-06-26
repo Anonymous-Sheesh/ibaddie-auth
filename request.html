@@ -1,363 +1,128 @@
 <!DOCTYPE html>
 <html dir="ltr" lang="en-US">
-
 <head>
     <meta charset="UTF-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-title" content="Ibaddie Auth">
-    <meta name="application-name" content="Ibaddie Auth">
-
-    <title>Ibaddie | Code Request</title>
-    <meta name="title" content="Ibaddie | Code Request">
-    <meta name="description" content="Request a 2FA code from Ibaddie.">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#050505">
-
+    <title>Ibaddie | Code Request</title>
     <link rel="stylesheet" href="./css/style.css">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;500;700&display=swap" rel="stylesheet">
-
     <link rel="icon" href="./favicon.ico">
-    <link rel="apple-touch-icon" href="./favicon.ico">
-
     <style>
-        body.request-body {
-            display: block;
-            overflow-y: auto;
-            padding: 20px 0 60px 0;
-            align-items: flex-start;
-        }
+        body.req-body { display:block; overflow-y:auto; padding:20px 0 60px; align-items:flex-start; }
+        .req-card { max-width:480px; width:95%; margin:20px auto; padding:2.5rem; }
+        .req-hero { text-align:center; margin-bottom:1.5rem; }
+        .req-hero h1 { font-size:2.4rem; margin-bottom:0.2rem; }
+        .req-hero .sub { font-size:0.95rem; color:#a0a0b0; }
 
-        .request-container {
-            max-width: 520px;
-            width: 95%;
-            margin: 20px auto;
-            padding: 2.5rem;
-        }
+        /* Presence badge */
+        .badge { display:inline-flex; align-items:center; gap:8px; padding:8px 18px; border-radius:30px; font-size:0.88rem; font-weight:600; margin-bottom:1.5rem; }
+        .badge-on { background:rgba(76,175,80,0.12); border:1px solid rgba(76,175,80,0.35); color:#4CAF50; }
+        .badge-off { background:rgba(255,76,76,0.1); border:1px solid rgba(255,76,76,0.3); color:#ff8888; }
+        .dot { width:9px; height:9px; border-radius:50%; }
+        .badge-on .dot { background:#4CAF50; box-shadow:0 0 8px #4CAF50; animation:pulse 2s infinite; }
+        .badge-off .dot { background:#ff4c4c; }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
 
-        .request-hero {
-            text-align: center;
-            margin-bottom: 2rem;
-        }
+        /* Big button */
+        .big-btn { background:linear-gradient(135deg,#FFD700,#FFA500); color:#000; font-weight:700; padding:18px; border:none; border-radius:14px; cursor:pointer; font-size:1.1rem; width:100%; margin:0.5rem 0; font-family:'Outfit',sans-serif; box-shadow:0 8px 24px rgba(255,165,0,0.25); transition:transform .2s,box-shadow .2s,opacity .2s; }
+        .big-btn:hover:not(:disabled) { transform:translateY(-2px); box-shadow:0 12px 32px rgba(255,165,0,0.4); }
+        .big-btn:disabled { opacity:0.35; cursor:not-allowed; }
 
-        .request-hero h1 {
-            font-size: 2.5rem;
-            margin-bottom: 0.3rem;
-        }
+        /* Upload zone */
+        .upload { display:none; border:2px dashed rgba(255,215,0,0.3); border-radius:14px; padding:2.5rem 1.5rem; text-align:center; margin:0.5rem 0; cursor:pointer; transition:border-color .2s,background .2s; }
+        .upload:hover { border-color:rgba(255,215,0,0.6); background:rgba(255,215,0,0.04); }
+        .upload-ico { font-size:2.5rem; margin-bottom:0.5rem; }
+        .upload-txt { font-size:0.88rem; color:#a0a0b0; line-height:1.5; }
+        .upload input { display:none; }
 
-        .request-hero .subtitle {
-            font-size: 1rem;
-            color: #a0a0b0;
-        }
+        /* Waiting */
+        .wait { display:none; text-align:center; padding:1.5rem 0; }
+        .spin { width:44px; height:44px; border:3px solid rgba(142,197,252,0.15); border-top-color:#8ec5fc; border-radius:50%; animation:rot 1s linear infinite; margin:0 auto 1rem; }
+        @keyframes rot { to{transform:rotate(360deg)} }
+        .wait-txt { font-size:0.95rem; color:#c8ddfa; }
+        .cancel-btn { background:transparent; color:#808090; border:1px solid rgba(255,255,255,0.15); padding:8px 20px; border-radius:10px; cursor:pointer; font-size:0.82rem; margin-top:1rem; font-family:'Outfit',sans-serif; }
+        .cancel-btn:hover { color:#fff; border-color:rgba(255,255,255,0.35); }
 
-        .presence-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 8px 18px;
-            border-radius: 30px;
-            font-size: 0.9rem;
-            font-weight: 600;
-            margin-bottom: 1.5rem;
-        }
+        /* Code display */
+        .code-box { display:none; background:linear-gradient(145deg,#1e1e28,#15151e); border:1px solid rgba(255,215,0,0.3); border-radius:20px; padding:2rem; text-align:center; margin:0.5rem 0; }
+        .code-num { font-size:52px; font-weight:700; color:#FFD700; letter-spacing:8px; text-shadow:0 0 20px rgba(255,215,0,0.3); }
+        .code-timer { font-size:1rem; color:#ff8888; margin-top:0.5rem; font-weight:600; }
+        .code-hint { font-size:0.82rem; color:#a0a0b0; margin-top:0.8rem; }
 
-        .presence-online {
-            background: rgba(76, 175, 80, 0.15);
-            border: 1px solid rgba(76, 175, 80, 0.4);
-            color: #4CAF50;
-        }
+        /* Rejected */
+        .reject { display:none; background:rgba(255,76,76,0.1); border:1px solid rgba(255,76,76,0.3); border-left:4px solid #ff4c4c; border-radius:4px 14px 14px 4px; padding:1.25rem; margin:0.5rem 0; }
+        .reject-title { color:#ff4c4c; font-weight:700; margin-bottom:0.4rem; font-size:0.95rem; }
+        .reject-reason { color:#ff8888; font-size:0.88rem; line-height:1.5; }
 
-        .presence-offline {
-            background: rgba(255, 76, 76, 0.1);
-            border: 1px solid rgba(255, 76, 76, 0.3);
-            color: #ff8888;
-        }
-
-        .presence-dot {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            display: inline-block;
-        }
-
-        .presence-online .presence-dot {
-            background: #4CAF50;
-            box-shadow: 0 0 8px #4CAF50;
-            animation: pulse-green 2s infinite;
-        }
-
-        .presence-offline .presence-dot {
-            background: #ff4c4c;
-        }
-
-        @keyframes pulse-green {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-
-        .request-btn {
-            background: linear-gradient(135deg, #FFD700, #FFA500);
-            color: black;
-            font-weight: 700;
-            padding: 16px 36px;
-            border: none;
-            border-radius: 14px;
-            cursor: pointer;
-            font-size: 1.05rem;
-            width: 100%;
-            margin: 0.5rem 0;
-            font-family: 'Outfit', sans-serif;
-            box-shadow: 0 8px 24px rgba(255, 165, 0, 0.25);
-            transition: transform 0.2s, box-shadow 0.2s, opacity 0.2s;
-        }
-
-        .request-btn:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: 0 12px 32px rgba(255, 165, 0, 0.4);
-        }
-
-        .request-btn:disabled {
-            opacity: 0.4;
-            cursor: not-allowed;
-        }
-
-        .upload-area {
-            display: none;
-            border: 2px dashed rgba(255, 215, 0, 0.3);
-            border-radius: 14px;
-            padding: 2rem;
-            text-align: center;
-            margin: 1rem 0;
-            cursor: pointer;
-            transition: border-color 0.2s, background 0.2s;
-        }
-
-        .upload-area:hover {
-            border-color: rgba(255, 215, 0, 0.6);
-            background: rgba(255, 215, 0, 0.05);
-        }
-
-        .upload-area-icon {
-            font-size: 2.5rem;
-            margin-bottom: 0.5rem;
-        }
-
-        .upload-area-text {
-            font-size: 0.9rem;
-            color: #a0a0b0;
-        }
-
-        .upload-area input[type="file"] {
-            display: none;
-        }
-
-        .status-box {
-            display: none;
-            background: rgba(142, 197, 252, 0.08);
-            border: 1px solid rgba(142, 197, 252, 0.25);
-            border-radius: 14px;
-            padding: 1.5rem;
-            text-align: center;
-            margin: 1rem 0;
-        }
-
-        .status-box-text {
-            font-size: 0.95rem;
-            color: #c8ddfa;
-            line-height: 1.5;
-        }
-
-        .status-spinner {
-            width: 40px;
-            height: 40px;
-            border: 3px solid rgba(142, 197, 252, 0.2);
-            border-top-color: #8ec5fc;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 1rem;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        .code-display {
-            display: none;
-            background: linear-gradient(145deg, #1e1e28, #15151e);
-            border: 1px solid rgba(255, 215, 0, 0.3);
-            border-radius: 20px;
-            padding: 2rem;
-            text-align: center;
-            margin: 1rem 0;
-        }
-
-        .code-display-number {
-            font-size: 56px;
-            font-weight: 700;
-            color: #FFD700;
-            letter-spacing: 8px;
-            text-shadow: 0 0 20px rgba(255, 215, 0, 0.3);
-        }
-
-        .code-display-timer {
-            font-size: 1rem;
-            color: #ff8888;
-            margin-top: 0.5rem;
-            font-weight: 600;
-        }
-
-        .reject-box {
-            display: none;
-            background: rgba(255, 76, 76, 0.1);
-            border: 1px solid rgba(255, 76, 76, 0.3);
-            border-left: 4px solid #ff4c4c;
-            border-radius: 4px 14px 14px 4px;
-            padding: 1.25rem;
-            margin: 1rem 0;
-        }
-
-        .reject-box-title {
-            color: #ff4c4c;
-            font-weight: 700;
-            margin-bottom: 0.5rem;
-        }
-
-        .reject-box-reason {
-            color: #ff8888;
-            font-size: 0.9rem;
-            line-height: 1.5;
-        }
-
-        .request-info {
-            background: rgba(142, 36, 170, 0.08);
-            border-left: 4px solid #ab47bc;
-            border-radius: 4px 12px 12px 4px;
-            padding: 1rem;
-            margin-top: 1.5rem;
-            text-align: left;
-        }
-
-        .request-info p {
-            font-size: 13px;
-            color: #e1bee7;
-            line-height: 1.4;
-        }
-
-        .request-info p.small {
-            font-size: 12px;
-            color: #b39ddb;
-        }
-
-        .tutorial-link {
-            display: block;
-            text-align: center;
-            margin-top: 1.5rem;
-            color: #FFD700;
-            text-decoration: none;
-            font-size: 0.9rem;
-            font-weight: 500;
-            border-bottom: 1px dashed rgba(255, 215, 0, 0.3);
-            padding-bottom: 2px;
-            transition: border-color 0.2s;
-        }
-
-        .tutorial-link:hover {
-            border-bottom-color: #FFD700;
-        }
-
-        @media screen and (max-width: 600px) {
-            .request-container {
-                padding: 1.5rem 1.25rem;
-            }
-
-            .request-hero h1 {
-                font-size: 2rem;
-            }
-
-            .code-display-number {
-                font-size: 44px;
-                letter-spacing: 4px;
-            }
-        }
+        /* Mini guide */
+        .guide { margin-top:1.5rem; padding-top:1.5rem; border-top:1px solid rgba(255,255,255,0.08); }
+        .guide-step { display:flex; align-items:flex-start; gap:10px; padding:6px 0; font-size:0.85rem; color:#b0b0c0; line-height:1.4; }
+        .guide-num { background:linear-gradient(135deg,#FFD700,#FFA500); color:#000; font-weight:700; font-size:0.75rem; width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:1px; }
+        .links { display:flex; justify-content:center; gap:1.5rem; margin-top:1.2rem; }
+        .link { color:#8ec5fc; text-decoration:none; font-size:0.82rem; border-bottom:1px dashed rgba(142,197,252,0.3); padding-bottom:2px; transition:border-color .2s; }
+        .link:hover { border-bottom-color:#8ec5fc; }
+        .link.gold { color:#FFD700; border-bottom-color:rgba(255,215,0,0.3); }
+        .link.gold:hover { border-bottom-color:#FFD700; }
+        @media(max-width:600px){ .req-card{padding:1.5rem 1.2rem;} .req-hero h1{font-size:1.9rem;} .code-num{font-size:42px;letter-spacing:4px;} }
     </style>
-
-    <script>window.addEventListener("load", () => document.body.classList.remove("preload"))</script>
 </head>
-
-<body class="preload request-body">
+<body class="preload req-body">
     <div class="background-anim"></div>
-    <div class="container glassmorphism request-container">
-        <div class="request-hero">
-            <h1 class="gradient-text" id="secretAdminTrigger" style="cursor: default; user-select: none;">Ibaddie</h1>
-            <h2 class="subtitle">Code Request</h2>
+    <div class="container glassmorphism req-card">
+        <div class="req-hero">
+            <h1 class="gradient-text" id="adminTrigger" style="cursor:default;user-select:none;">Ibaddie</h1>
+            <p class="sub">Code Request</p>
         </div>
 
-        <!-- Admin presence badge -->
-        <div id="presenceBadge" class="presence-badge presence-offline" style="display: none;">
-            <span class="presence-dot"></span>
-            <span id="presenceText">Checking...</span>
+        <div id="badge" class="badge badge-off" style="display:none;">
+            <span class="dot"></span><span id="badgeText">Checking...</span>
         </div>
 
-        <!-- Request Code button (initial state) -->
-        <button id="requestBtn" class="request-btn" disabled>Request Code</button>
+        <button id="reqBtn" class="big-btn" disabled>📸 Request Code</button>
 
-        <!-- Screenshot upload area (shown after clicking Request Code) -->
-        <div id="uploadArea" class="upload-area">
-            <div class="upload-area-icon">📸</div>
-            <div class="upload-area-text">Click to upload a screenshot of your<br>Microsoft verification screen</div>
+        <div id="uploadArea" class="upload">
+            <div class="upload-ico">📸</div>
+            <div class="upload-txt">Click to upload a screenshot of your<br>Microsoft verification screen</div>
             <input type="file" id="fileInput" accept="image/*">
         </div>
 
-        <!-- Status box (waiting for admin) -->
-        <div id="statusBox" class="status-box">
-            <div class="status-spinner"></div>
-            <div class="status-box-text" id="statusText">Waiting for Ibaddie to review your request...</div>
+        <div id="waitArea" class="wait">
+            <div class="spin"></div>
+            <div class="wait-txt" id="waitText">Waiting for Ibaddie to review...</div>
+            <button class="cancel-btn" onclick="cancelRequest()">Cancel</button>
         </div>
 
-        <!-- Code display (approved) -->
-        <div id="codeDisplay" class="code-display">
-            <div class="code-display-number" id="codeNumber">000000</div>
-            <div class="code-display-timer" id="codeTimer">Expires in 30s</div>
+        <div id="codeBox" class="code-box">
+            <div class="code-num" id="codeNum">000000</div>
+            <div class="code-timer" id="codeTimer">Expires in 30s</div>
+            <div class="code-hint">Enter this in your launcher NOW!</div>
         </div>
 
-        <!-- Rejection box -->
-        <div id="rejectBox" class="reject-box">
-            <div class="reject-box-title">❌ Request Rejected</div>
-            <div class="reject-box-reason" id="rejectReason"></div>
+        <div id="rejectBox" class="reject">
+            <div class="reject-title">❌ Request Rejected</div>
+            <div class="reject-reason" id="rejectReason"></div>
         </div>
 
-        <!-- Info box -->
-        <div class="request-info">
-            <p><strong>📋 How this works:</strong></p>
-            <p class="small">1. Open your Minecraft Launcher and go to the Microsoft login screen</p>
-            <p class="small">2. When Microsoft asks for a verification code, take a screenshot</p>
-            <p class="small">3. Click "Request Code" above and upload the screenshot</p>
-            <p class="small">4. Ibaddie reviews and sends your code — enter it immediately!</p>
-            <p class="small" style="margin-top: 8px; color: #ff8888;">⚠️ Codes expire in 30 seconds. Only request when ready to enter it.</p>
-            <p class="small" style="color: #ffd54f;">💡 This is a Full Access account with 2FA system. Login with email + password. Codes are only needed if Microsoft asks for verification.</p>
+        <div class="guide">
+            <div class="guide-step"><span class="guide-num">1</span><span>Login to Minecraft with your email + password</span></div>
+            <div class="guide-step"><span class="guide-num">2</span><span>If asked for a code, screenshot the verification screen</span></div>
+            <div class="guide-step"><span class="guide-num">3</span><span>Click "Request Code" above and upload the screenshot</span></div>
         </div>
 
-        <a href="tutorial.html" class="tutorial-link">📖 Read the full login guide</a>
+        <div class="links">
+            <a href="tutorial.html" class="link">📖 Full Guide</a>
+            <a href="tutorial.html" class="link gold">⚠️ Account Info</a>
+        </div>
     </div>
 
     <script src="./js/request.js"></script>
-
     <script>
-        let clickCount = 0;
-        let clickTimeout;
-        document.getElementById('secretAdminTrigger').addEventListener('click', () => {
-            clickCount++;
-            if (clickCount >= 3) {
-                window.location.href = 'admin.html';
-            }
-            clearTimeout(clickTimeout);
-            clickTimeout = setTimeout(() => {
-                clickCount = 0;
-            }, 1000);
+        let cc=0,ct;
+        document.getElementById('adminTrigger').addEventListener('click',()=>{
+            cc++; if(cc>=3)window.location.href='admin.html';
+            clearTimeout(ct); ct=setTimeout(()=>{cc=0},1000);
         });
     </script>
 </body>
-
 </html>
