@@ -1,5 +1,5 @@
 // ══════════════════════════════════════════════════════════════════════════════
-// request.js — Buyer Code Request Logic (V3 Clean)
+// request.js — Buyer Code Request Logic (V3.1 — fresh code + click-to-copy)
 // ══════════════════════════════════════════════════════════════════════════════
 
 const API = "https://totp-backend.ibaddie.workers.dev";
@@ -10,6 +10,8 @@ let uploading = false;
 let statusTimer = null;
 let codeTimer = null;
 let presenceTimer = null;
+let pendingCountdownTimer = null;
+let currentCode = null;
 
 // ─── INIT ──────────────────────────────────────────────────────────────────────
 const url = new URL(window.location.href);
@@ -104,8 +106,8 @@ function compress(file) {
     });
 }
 
-// ─── STATUS POLLING (3s) ───────────────────────────────────────────────────────
-function startPolling() { stopPolling(); poll(); statusTimer = setInterval(poll, 3000); }
+// ─── STATUS POLLING (2s) ───────────────────────────────────────────────────────
+function startPolling() { stopPolling(); poll(); statusTimer = setInterval(poll, 2000); }
 function stopPolling() { if (statusTimer) { clearInterval(statusTimer); statusTimer = null; } }
 
 async function poll() {
@@ -115,20 +117,50 @@ async function poll() {
         const d = await r.json();
 
         if (d.status === 'none' || d.status === 'expired') {
-            stopPolling(); hideAll();
+            stopPolling(); stopPendingCountdown(); hideAll();
             $('reqBtn').style.display = 'block'; $('reqBtn').disabled = false;
-            if (d.status === 'expired') { $('waitArea').style.display='block'; $('waitText').textContent='Code expired. Request a new one.'; setTimeout(()=>{$('waitArea').style.display='none';},2000); }
+            if (d.status === 'expired') {
+                $('waitArea').style.display='block';
+                $('waitText').textContent='Code expired. Request a new one.';
+                setTimeout(()=>{$('waitArea').style.display='none';},2000);
+            }
             return;
         }
-        if (d.status === 'pending') { hideAll(); $('waitArea').style.display='block'; $('waitText').textContent='Waiting for Ibaddie to review...'; }
-        else if (d.status === 'request_fresh') { stopPolling(); hideAll(); $('uploadArea').style.display='block'; $('fileInput').value=''; }
+        if (d.status === 'pending') {
+            stopPendingCountdown();
+            hideAll(); $('waitArea').style.display='block';
+            $('waitText').textContent='Waiting for Ibaddie to review...';
+        }
+        else if (d.status === 'approved_pending') {
+            // Admin approved but code needs to wait for fresh window
+            // Show "Showing code in X..." countdown
+            hideAll();
+            $('codeBox').style.display = 'block';
+            $('codeNum').textContent = '······';
+            $('codeNum').style.color = '#ff4c4c';
+            $('codeNum').style.cursor = 'default';
+            currentCode = null;
+            const waitSecs = d.waitSeconds || 5;
+            $('codeTimer').textContent = `Showing code in ${waitSecs}s...`;
+            startPendingCountdown(waitSecs);
+        }
         else if (d.status === 'approved' && d.code) {
-            stopPolling(); hideAll();
+            stopPendingCountdown();
+            hideAll();
             $('codeBox').style.display = 'block';
             $('codeNum').textContent = d.code;
+            $('codeNum').style.color = '#FFD700';
+            $('codeNum').style.cursor = 'pointer';
+            currentCode = d.code;
             startCountdown(d.codeExpiresIn || 30);
         }
+        else if (d.status === 'request_fresh') {
+            stopPendingCountdown();
+            stopPolling(); hideAll();
+            $('uploadArea').style.display='block'; $('fileInput').value='';
+        }
         else if (d.status === 'rejected') {
+            stopPendingCountdown();
             stopPolling(); hideAll();
             $('rejectBox').style.display = 'block';
             $('rejectReason').textContent = d.rejectionReason || 'Please follow the guide and try again.';
@@ -136,6 +168,24 @@ async function poll() {
         }
     } catch {}
 }
+
+// ─── PENDING COUNTDOWN (for approved_pending "Showing code in X...") ────────────
+function startPendingCountdown(secs) {
+    stopPendingCountdown();
+    let left = secs;
+    $('codeTimer').textContent = `Showing code in ${left}s...`;
+    pendingCountdownTimer = setInterval(() => {
+        left--;
+        if (left <= 0) {
+            stopPendingCountdown();
+            // Force immediate poll to get the fresh code
+            poll();
+            return;
+        }
+        $('codeTimer').textContent = `Showing code in ${left}s...`;
+    }, 1000);
+}
+function stopPendingCountdown() { if (pendingCountdownTimer) { clearInterval(pendingCountdownTimer); pendingCountdownTimer = null; } }
 
 // ─── CODE COUNTDOWN ────────────────────────────────────────────────────────────
 function startCountdown(s) {
@@ -147,6 +197,7 @@ function startCountdown(s) {
             clearInterval(codeTimer);
             $('codeBox').style.display = 'none';
             $('codeNum').textContent = '000000';
+            currentCode = null;
             $('waitArea').style.display = 'block';
             $('waitText').textContent = 'Code expired. Request a new one.';
             $('reqBtn').style.display = 'block'; $('reqBtn').disabled = false;
@@ -156,11 +207,21 @@ function startCountdown(s) {
     }, 1000);
 }
 
+// ─── CLICK TO COPY ─────────────────────────────────────────────────────────────
+$('codeNum').addEventListener('click', () => {
+    if (!currentCode) return;
+    navigator.clipboard.writeText(currentCode).then(() => {
+        const orig = $('codeNum').style.color;
+        $('codeNum').style.color = '#4CAF50';
+        setTimeout(() => { $('codeNum').style.color = orig; }, 500);
+    }).catch(() => {});
+});
+
 // ─── CANCEL ────────────────────────────────────────────────────────────────────
 async function cancelRequest() {
     if (!token) return;
     try { await fetch(`${API}/api/code-request/withdraw`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({token}) }); } catch {}
-    stopPolling(); hideAll();
+    stopPolling(); stopPendingCountdown(); hideAll();
     $('reqBtn').style.display = 'block'; $('reqBtn').disabled = false;
 }
 window.cancelRequest = cancelRequest;
@@ -172,8 +233,8 @@ async function checkExisting() {
         const r = await fetch(`${API}/api/code-request/status?token=${token}`);
         const d = await r.json();
         if (d.status === 'pending') { hideAll(); $('reqBtn').style.display='none'; startPolling(); }
-        else if (d.status === 'request_fresh') { hideAll(); $('reqBtn').style.display='none'; $('uploadArea').style.display='block'; }
-        else if (d.status === 'approved' && d.code && d.codeExpiresIn > 0) { hideAll(); $('reqBtn').style.display='none'; $('codeBox').style.display='block'; $('codeNum').textContent=d.code; startCountdown(d.codeExpiresIn); }
+        else if (d.status === 'approved_pending') { hideAll(); $('reqBtn').style.display='none'; $('codeBox').style.display='block'; $('codeNum').textContent='······'; $('codeNum').style.color='#ff4c4c'; startPendingCountdown(d.waitSeconds||5); startPolling(); }
+        else if (d.status === 'approved' && d.code && d.codeExpiresIn > 0) { hideAll(); $('reqBtn').style.display='none'; $('codeBox').style.display='block'; $('codeNum').textContent=d.code; $('codeNum').style.color='#FFD700'; currentCode=d.code; startCountdown(d.codeExpiresIn); }
         else if (d.status === 'rejected') { hideAll(); $('reqBtn').style.display='none'; $('rejectBox').style.display='block'; $('rejectReason').textContent=d.rejectionReason||'Try again.'; setTimeout(()=>{$('rejectBox').style.display='none';$('reqBtn').style.display='block';$('reqBtn').disabled=false;},4000); }
     } catch {}
 }
