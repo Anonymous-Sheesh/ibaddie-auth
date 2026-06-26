@@ -11,14 +11,8 @@
 
     <title>Ibaddie | Login Tutorial</title>
     <meta name="title" content="Ibaddie | Login Tutorial">
-    <meta name="description" content="How to log in to your Ibaddie Minecraft account using 2FA.">
+    <meta name="description" content="How to log in to your Ibaddie Minecraft account.">
     <meta name="theme-color" content="#050505">
-
-    <meta property="og:type" content="website">
-    <meta property="og:url" content="https://anonymous-sheesh.github.io/ibaddie-auth/tutorial">
-    <meta property="og:title" content="Ibaddie | Login Tutorial">
-    <meta property="og:site_name" content="Ibaddie">
-    <meta property="og:description" content="How to log in to your Ibaddie Minecraft account using 2FA.">
 
     <link rel="stylesheet" href="./css/style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -29,296 +23,96 @@
     <link rel="apple-touch-icon" href="./favicon.ico">
 
     <style>
-        /* Tutorial-specific styles */
         body.tutorial-body {
             display: block;
             overflow-y: auto;
             padding: 20px 0 60px 0;
             align-items: flex-start;
         }
-
         .tutorial-container {
-            max-width: 720px;
-            width: 95%;
-            margin: 20px auto;
-            padding: 2.5rem;
+            max-width: 720px; width: 95%; margin: 20px auto; padding: 2.5rem;
         }
-
-        .tutorial-hero {
-            text-align: center;
-            margin-bottom: 2.5rem;
-            padding-bottom: 1.5rem;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-        }
-
-        .tutorial-hero h1 {
-            font-size: 2.2rem;
-            margin-bottom: 0.5rem;
-        }
-
-        .tutorial-hero .subtitle {
-            font-size: 1rem;
-            color: #a0a0b0;
-            letter-spacing: 0.5px;
-        }
-
-        .tutorial-section {
-            margin-bottom: 2rem;
-            text-align: left;
-        }
-
-        .tutorial-section h2 {
-            color: #8ec5fc;
-            font-size: 1.3rem;
-            margin-bottom: 1rem;
-            font-weight: 600;
-            letter-spacing: 0.3px;
-        }
-
-        .tutorial-warning {
-            background: rgba(255, 165, 0, 0.1);
-            border: 1px solid rgba(255, 165, 0, 0.35);
-            border-left: 4px solid #FFA500;
-            border-radius: 4px 12px 12px 4px;
-            padding: 16px 20px;
-            margin-bottom: 1.5rem;
-            color: #ffd699;
-            font-size: 0.92rem;
-            line-height: 1.55;
-        }
-
-        .tutorial-warning strong {
-            color: #ffe082;
-            font-weight: 700;
-        }
-
-        .tutorial-info {
-            background: rgba(142, 197, 252, 0.08);
-            border: 1px solid rgba(142, 197, 252, 0.25);
-            border-left: 4px solid #8ec5fc;
-            border-radius: 4px 12px 12px 4px;
-            padding: 14px 18px;
-            margin-bottom: 1.5rem;
-            color: #c8ddfa;
-            font-size: 0.9rem;
-            line-height: 1.55;
-        }
-
-        .tutorial-info strong {
-            color: #8ec5fc;
-        }
-
-        .tutorial-steps {
-            counter-reset: step;
-            list-style: none;
-            padding: 0;
-            margin: 0 0 1.5rem 0;
-        }
-
-        .tutorial-steps li {
-            counter-increment: step;
-            position: relative;
-            padding: 12px 0 12px 50px;
-            font-size: 0.95rem;
-            line-height: 1.55;
-            color: #e0e0e0;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-        }
-
-        .tutorial-steps li:last-child {
-            border-bottom: none;
-        }
-
-        .tutorial-steps li::before {
-            content: counter(step);
-            position: absolute;
-            left: 0;
-            top: 12px;
-            width: 32px;
-            height: 32px;
-            background: linear-gradient(135deg, #FFD700, #FFA500);
-            color: black;
-            font-weight: 700;
-            font-size: 0.95rem;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 4px 10px rgba(255, 165, 0, 0.3);
-        }
-
-        .tutorial-steps li strong {
-            color: #FFD700;
-            font-weight: 600;
-        }
-
-        .tutorial-rules {
-            list-style: none;
-            padding: 0;
-            margin: 0 0 1.5rem 0;
-        }
-
-        .tutorial-rules li {
-            padding: 10px 0 10px 28px;
-            position: relative;
-            font-size: 0.92rem;
-            line-height: 1.5;
-            color: #d0d0d8;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-        }
-
-        .tutorial-rules li:last-child {
-            border-bottom: none;
-        }
-
-        .tutorial-rules li::before {
-            content: "▪️";
-            position: absolute;
-            left: 0;
-            top: 10px;
-            font-size: 0.85rem;
-        }
-
-        .tutorial-rules li strong {
-            color: #ff8888;
-        }
-
-        .tutorial-help {
-            background: rgba(76, 175, 80, 0.08);
-            border: 1px solid rgba(76, 175, 80, 0.25);
-            border-left: 4px solid #4CAF50;
-            border-radius: 4px 12px 12px 4px;
-            padding: 16px 20px;
-            margin-bottom: 1.5rem;
-            color: #b8e6b8;
-            font-size: 0.92rem;
-            line-height: 1.55;
-        }
-
-        .tutorial-help strong {
-            color: #4CAF50;
-        }
-
-        .tutorial-footer {
-            text-align: center;
-            margin-top: 2rem;
-            padding-top: 1.5rem;
-            border-top: 1px solid rgba(255, 255, 255, 0.08);
-            color: #a0a0b0;
-            font-size: 0.9rem;
-        }
-
-        .tutorial-footer strong {
-            color: #e0c3fc;
-            font-weight: 700;
-            display: block;
-            margin-top: 6px;
-            font-size: 1.05rem;
-        }
-
-        .tutorial-back {
-            display: inline-flex;
-            align-items: center;
-            color: #a0a0b0;
-            text-decoration: none;
-            margin-bottom: 1.5rem;
-            font-size: 0.9rem;
-            font-weight: 500;
-            transition: color 0.2s, transform 0.2s;
-        }
-
-        .tutorial-back:hover {
-            color: #fff;
-            transform: translateX(-3px);
-        }
-
-        .timer-emoji {
-            color: #FFA500;
-            font-weight: 700;
-        }
-
-        @media screen and (max-width: 600px) {
-            .tutorial-container {
-                padding: 1.5rem 1.25rem;
-            }
-
-            .tutorial-hero h1 {
-                font-size: 1.8rem;
-            }
-
-            .tutorial-section h2 {
-                font-size: 1.15rem;
-            }
-
-            .tutorial-steps li,
-            .tutorial-rules li {
-                font-size: 0.88rem;
-            }
-
-            .tutorial-steps li::before {
-                width: 28px;
-                height: 28px;
-                font-size: 0.85rem;
-            }
-
-            .tutorial-steps li {
-                padding-left: 44px;
-            }
-
-            .tutorial-rules li {
-                padding-left: 24px;
-            }
-        }
+        .tutorial-hero { text-align: center; margin-bottom: 2.5rem; padding-bottom: 1.5rem; border-bottom: 1px solid rgba(255,255,255,0.08); }
+        .tutorial-hero h1 { font-size: 2.2rem; margin-bottom: 0.5rem; }
+        .tutorial-hero .subtitle { font-size: 1rem; color: #a0a0b0; letter-spacing: 0.5px; }
+        .tutorial-section { margin-bottom: 2rem; text-align: left; }
+        .tutorial-section h2 { color: #8ec5fc; font-size: 1.3rem; margin-bottom: 1rem; font-weight: 600; }
+        .tutorial-warning { background: rgba(255,165,0,0.1); border: 1px solid rgba(255,165,0,0.35); border-left: 4px solid #FFA500; border-radius: 4px 12px 12px 4px; padding: 16px 20px; margin-bottom: 1.5rem; color: #ffd699; font-size: 0.92rem; line-height: 1.55; }
+        .tutorial-warning strong { color: #ffe082; font-weight: 700; }
+        .tutorial-info { background: rgba(142,197,252,0.08); border: 1px solid rgba(142,197,252,0.25); border-left: 4px solid #8ec5fc; border-radius: 4px 12px 12px 4px; padding: 14px 18px; margin-bottom: 1.5rem; color: #c8ddfa; font-size: 0.9rem; line-height: 1.55; }
+        .tutorial-info strong { color: #8ec5fc; }
+        .tutorial-steps { counter-reset: step; list-style: none; padding: 0; margin: 0 0 1.5rem 0; }
+        .tutorial-steps li { counter-increment: step; position: relative; padding: 12px 0 12px 50px; font-size: 0.95rem; line-height: 1.55; color: #e0e0e0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+        .tutorial-steps li:last-child { border-bottom: none; }
+        .tutorial-steps li::before { content: counter(step); position: absolute; left: 0; top: 12px; width: 32px; height: 32px; background: linear-gradient(135deg, #FFD700, #FFA500); color: black; font-weight: 700; font-size: 0.95rem; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 10px rgba(255,165,0,0.3); }
+        .tutorial-steps li strong { color: #FFD700; font-weight: 600; }
+        .tutorial-rules { list-style: none; padding: 0; margin: 0 0 1.5rem 0; }
+        .tutorial-rules li { padding: 10px 0 10px 28px; position: relative; font-size: 0.92rem; line-height: 1.5; color: #d0d0d8; border-bottom: 1px solid rgba(255,255,255,0.04); }
+        .tutorial-rules li:last-child { border-bottom: none; }
+        .tutorial-rules li::before { content: "▪️"; position: absolute; left: 0; top: 10px; font-size: 0.85rem; }
+        .tutorial-rules li strong { color: #ff8888; }
+        .tutorial-help { background: rgba(76,175,80,0.08); border: 1px solid rgba(76,175,80,0.25); border-left: 4px solid #4CAF50; border-radius: 4px 12px 12px 4px; padding: 16px 20px; margin-bottom: 1.5rem; color: #b8e6b8; font-size: 0.92rem; line-height: 1.55; }
+        .tutorial-help strong { color: #4CAF50; }
+        .tutorial-footer { text-align: center; margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid rgba(255,255,255,0.08); color: #a0a0b0; font-size: 0.9rem; }
+        .tutorial-footer strong { color: #e0c3fc; font-weight: 700; display: block; margin-top: 6px; font-size: 1.05rem; }
+        .tutorial-back { display: inline-flex; align-items: center; color: #a0a0b0; text-decoration: none; margin-bottom: 1.5rem; font-size: 0.9rem; font-weight: 500; transition: color 0.2s, transform 0.2s; }
+        .tutorial-back:hover { color: #fff; transform: translateX(-3px); }
+        .timer-emoji { color: #FFA500; font-weight: 700; }
+        @media screen and (max-width: 600px) { .tutorial-container { padding: 1.5rem 1.25rem; } .tutorial-hero h1 { font-size: 1.8rem; } .tutorial-section h2 { font-size: 1.15rem; } .tutorial-steps li, .tutorial-rules li { font-size: 0.88rem; } .tutorial-steps li::before { width: 28px; height: 28px; font-size: 0.85rem; } .tutorial-steps li { padding-left: 44px; } .tutorial-rules li { padding-left: 24px; } }
     </style>
-
     <script>window.addEventListener("load", () => document.body.classList.remove("preload"))</script>
 </head>
 
 <body class="preload tutorial-body">
     <div class="background-anim"></div>
     <div class="container glassmorphism tutorial-container">
-
         <a href="index.html" class="tutorial-back">← Back to Authenticator</a>
-
         <div class="tutorial-hero">
             <h1 class="gradient-text" id="secretAdminTrigger" style="cursor: default; user-select: none;">Ibaddie</h1>
-            <h2 class="subtitle">Microsoft 2FA Verification Guide</h2>
+            <h2 class="subtitle">Login Guide</h2>
+        </div>
+
+        <div class="tutorial-info" style="border-left-color: #FFD700; background: rgba(255,215,0,0.08); color: #ffe082;">
+            <strong>💡 About Your Account:</strong> This is a <strong>Full Access account with 2FA system</strong> — not NFA or minimal full access. You log in with just your email and password. Verification codes are only needed if Microsoft asks for additional verification.
         </div>
 
         <div class="tutorial-warning">
-            <strong>⚠️ IMPORTANT:</strong> Do <strong>NOT</strong> message for a verification code until you are <strong>already on the Microsoft verification screen inside a Minecraft launcher.</strong>
+            <strong>⚠️ IMPORTANT:</strong> Do <strong>NOT</strong> request a verification code until you are <strong>already on the Microsoft verification screen inside a Minecraft launcher.</strong>
             <br><br>
-            Verification codes are intended <strong>ONLY</strong> for launcher login. If you request a code too early, allow it to expire, or use it outside of a launcher login, you will need to wait <strong>24 hours</strong> before another code can be provided.
+            If you request a code too early, allow it to expire, or use it outside of a launcher login, you will need to wait before another code can be provided.
         </div>
 
         <div class="tutorial-info">
-            <span class="timer-emoji">⏳</span> <strong>Codes expire in approximately 30 seconds.</strong> Only request one when you are ready to enter it immediately.
+            <span class="timer-emoji">⏳</span> <strong>Codes expire in approximately 30 seconds.</strong> Only request one when you are ready to enter it immediately. Ibaddie must review your screenshot before sending the code.
         </div>
 
         <div class="tutorial-section">
-            <h2>➡️ How to Use Your Account</h2>
+            <h2>➡️ How to Login</h2>
             <ol class="tutorial-steps">
                 <li>Open the official Minecraft Launcher (or another Minecraft launcher).</li>
                 <li>Click <strong>Sign in with Microsoft</strong>.</li>
-                <li>Enter the email address provided.</li>
-                <li>Click <strong>Other ways to sign in</strong> → <strong>Use my password</strong>.</li>
-                <li>If Microsoft asks for additional verification, select <strong>Authenticator App</strong>.</li>
-                <li><strong>Message the seller (Ibaddie)</strong> and request your verification code.</li>
-                <li>Copy the code as soon as it is sent and enter it immediately into Microsoft.</li>
-                <li>Login complete — enjoy!</li>
+                <li>Enter the email address and password provided.</li>
+                <li>If Microsoft logs you in without asking for a code — <strong>you're done!</strong> Enjoy the game.</li>
+                <li>If Microsoft asks for additional verification, select <strong>Authenticator App</strong> or <strong>Enter a code</strong>.</li>
+                <li><strong>Take a screenshot</strong> of the verification screen showing the code entry field.</li>
+                <li>Open your <strong>Code Request Link</strong> (provided in your delivery message).</li>
+                <li>Click <strong>Request Code</strong> and upload the screenshot you just took.</li>
+                <li>Wait for <strong>Ibaddie to approve</strong> your request (usually under 1 minute when online). The code will appear on your screen.</li>
+                <li><strong>Enter the code immediately</strong> into the launcher — it expires in 30 seconds!</li>
             </ol>
         </div>
 
         <div class="tutorial-section">
             <h2>⚠️ Important Rules</h2>
             <ul class="tutorial-rules">
-                <li>Only request a code when you're at the Microsoft verification screen.</li>
+                <li>Only request a code when you're at the Microsoft verification screen in a launcher.</li>
                 <li>Do <strong>NOT</strong> request a code "just to test."</li>
                 <li>Do <strong>NOT</strong> let the code expire.</li>
+                <li>Do <strong>NOT</strong> try to use the code in a web browser to change account details.</li>
                 <li>Follow the login guide exactly.</li>
             </ul>
             <div class="tutorial-info" style="margin-bottom: 0;">
-                If a code is requested too early or allowed to expire, <strong>another code cannot be provided for 24 hours.</strong>
+                Want to change account details (email, password, security info)? This requires a <strong>full access upgrade</strong> available for an additional cost. Message Ibaddie for details.
             </div>
         </div>
 
@@ -331,24 +125,17 @@
             Thank you for your purchase!
             <strong>Ibaddie Services</strong>
         </div>
-
     </div>
 
-    <!-- Hidden admin trigger: triple-click the "Ibaddie" title within 1 second -->
     <script>
         let clickCount = 0;
         let clickTimeout;
         document.getElementById('secretAdminTrigger').addEventListener('click', () => {
             clickCount++;
-            if (clickCount >= 3) {
-                window.location.href = 'admin.html';
-            }
+            if (clickCount >= 3) { window.location.href = 'admin.html'; }
             clearTimeout(clickTimeout);
-            clickTimeout = setTimeout(() => {
-                clickCount = 0;
-            }, 1000);
+            clickTimeout = setTimeout(() => { clickCount = 0; }, 1000);
         });
     </script>
 </body>
-
 </html>
