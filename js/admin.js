@@ -1,11 +1,45 @@
 // ══════════════════════════════════════════════════════════════════════════════
-// admin.js — V3 Clean (Code Request System only)
+// admin.js — V3.1 (background-tab-safe heartbeat + notification sound)
 // ══════════════════════════════════════════════════════════════════════════════
 
 const API = "https://totp-backend.ibaddie.workers.dev";
 const SITE = window.location.origin + window.location.pathname.replace('/admin.html', '');
 let auth = "";
 const $ = id => document.getElementById(id);
+
+let lastPendingCount = 0;
+
+// ─── NOTIFICATION SOUND ────────────────────────────────────────────────────────
+// Plays a beep using Web Audio API (no external file needed)
+let audioCtx = null;
+function playNotificationSound() {
+    try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.frequency.value = 880;
+        osc.type = 'sine';
+        gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+        osc.start(audioCtx.currentTime);
+        osc.stop(audioCtx.currentTime + 0.5);
+        // Second beep after 200ms
+        setTimeout(() => {
+            try {
+                const osc2 = audioCtx.createOscillator();
+                const gain2 = audioCtx.createGain();
+                osc2.connect(gain2); gain2.connect(audioCtx.destination);
+                osc2.frequency.value = 1320;
+                osc2.type = 'sine';
+                gain2.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                gain2.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+                osc2.start(audioCtx.currentTime);
+                osc2.stop(audioCtx.currentTime + 0.5);
+            } catch {}
+        }, 200);
+    } catch {}
+}
 
 // ─── LOGIN ─────────────────────────────────────────────────────────────────────
 function login() {
@@ -22,7 +56,6 @@ function togglePw() { const i = $('pw'); i.type = i.type === 'password' ? 'text'
 window.togglePw = togglePw;
 
 function logout() {
-    // Go offline immediately
     fetch(`${API}/api/admin/go-offline`, { method: 'POST', headers: { Authorization: auth } }).catch(() => {});
     stopHeartbeat(); stopPending();
     auth = "";
@@ -37,19 +70,32 @@ window.addEventListener('beforeunload', () => {
     }
 });
 
-// ─── HEARTBEAT (5s) ────────────────────────────────────────────────────────────
+// ─── VISIBILITY CHANGE: send heartbeat immediately when tab becomes visible ────
+// This compensates for browser throttling of setInterval in background tabs.
+// When the admin switches back to the tab, we immediately send a heartbeat so
+// the buyer sees "online" within seconds.
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && auth) {
+        beat(); // immediate heartbeat
+        pollPending(); // immediate poll
+    }
+});
+
+// ─── HEARTBEAT (3s when visible, survives background throttling) ───────────────
 let hbTimer = null;
 function startHeartbeat() {
     stopHeartbeat();
     beat();
-    hbTimer = setInterval(beat, 5000);
+    // 3s interval — even with browser throttling (which may push it to 10-15s
+    // in background), the 30s threshold in the worker means admin stays "online"
+    hbTimer = setInterval(beat, 3000);
 }
 function stopHeartbeat() { if (hbTimer) { clearInterval(hbTimer); hbTimer = null; } }
 async function beat() { try { await fetch(`${API}/api/admin/heartbeat`, { method: 'POST', headers: { Authorization: auth } }); } catch {} }
 
-// ─── PENDING REQUESTS (5s) ─────────────────────────────────────────────────────
+// ─── PENDING REQUESTS (3s when visible) ────────────────────────────────────────
 let pTimer = null;
-function startPending() { stopPending(); pollPending(); pTimer = setInterval(pollPending, 5000); }
+function startPending() { stopPending(); pollPending(); pTimer = setInterval(pollPending, 3000); }
 function stopPending() { if (pTimer) { clearInterval(pTimer); pTimer = null; } }
 
 async function pollPending() {
@@ -57,7 +103,15 @@ async function pollPending() {
         const r = await fetch(`${API}/api/admin/pending`, { headers: { Authorization: auth } });
         if (!r.ok) return;
         const d = await r.json();
-        renderPending(d.pending || []);
+        const pending = d.pending || [];
+
+        // Notification sound: if new requests arrived AND tab is not focused
+        if (pending.length > lastPendingCount && document.visibilityState !== 'visible') {
+            playNotificationSound();
+        }
+        lastPendingCount = pending.length;
+
+        renderPending(pending);
     } catch {}
 }
 
@@ -73,7 +127,7 @@ function renderPending(pending) {
         card.className = 'req-card';
         card.innerHTML = `
             <div class="req-info"><div><strong>${r.buyerUser}</strong><br><span>MS: ${r.msEmail||'?'} · ${ago}</span></div><span style="font-size:0.72rem;color:${r.status==='request_fresh'?'#FFA500':'#4CAF50'};">${st}</span></div>
-            <img class="req-img" src="${r.screenshot}" onclick="window.open('${r.screenshot}')">
+            <div id="img-${r.requestId}" style="margin-bottom:10px;"><button class="act-btn view" onclick="loadScreenshot('${r.requestId}')">📸 View Screenshot</button></div>
             <div class="req-btns">
                 <button class="req-btn approve" onclick="approve('${r.requestId}')">✓ Approve</button>
                 <button class="req-btn reject" onclick="reject('${r.requestId}')">✗ Reject</button>
@@ -82,6 +136,22 @@ function renderPending(pending) {
         c.appendChild(card);
     });
 }
+
+// ─── LOAD SCREENSHOT ON DEMAND ─────────────────────────────────────────────────
+async function loadScreenshot(requestId) {
+    const container = $('img-' + requestId);
+    if (!container) return;
+    container.innerHTML = '<p style="color:#808090;font-size:0.78rem;">Loading screenshot...</p>';
+    try {
+        const r = await fetch(`${API}/api/admin/pending-screenshot?requestId=${requestId}`, { headers: { Authorization: auth } });
+        if (!r.ok) throw new Error('Failed');
+        const d = await r.json();
+        container.innerHTML = `<img class="req-img" src="${d.screenshot}" onclick="window.open('${d.screenshot}')">`;
+    } catch (e) {
+        container.innerHTML = '<p style="color:#ff4c4c;font-size:0.78rem;">Failed to load</p>';
+    }
+}
+window.loadScreenshot = loadScreenshot;
 
 async function approve(id) {
     try {
