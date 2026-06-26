@@ -79,7 +79,7 @@ async function beat() { try { await fetch(`${API}/api/admin/heartbeat`, { method
 
 // ─── PENDING REQUESTS ──────────────────────────────────────────────────────────
 let pTimer = null;
-function startPending() { stopPending(); pollPending(); pTimer = setInterval(pollPending, 4000); }
+function startPending() { stopPending(); pollPending(); pTimer = setInterval(pollPending, 8000); }
 function stopPending() { if (pTimer) { clearInterval(pTimer); pTimer = null; } }
 
 // Track which request IDs we've already shown (to detect NEW ones for sound)
