@@ -33,8 +33,20 @@ function login() {
     if (!p) return showErr("Password required");
     auth = p;
     fetch(`${API}/api/admin/list`, { headers: { Authorization: auth } })
-        .then(r => { if (r.ok) { $('loginSec').classList.remove('active'); $('dashSec').classList.add('active'); startHeartbeat(); startPending(); fetchList(); } else showErr("Wrong password"); })
-        .catch(() => showErr("Network error"));
+        .then(r => {
+            if (r.ok) {
+                $('loginSec').classList.remove('active');
+                $('dashSec').classList.add('active');
+                startHeartbeat();
+                startPending();
+                fetchList();
+            } else if (r.status === 401) {
+                showErr("Wrong password");
+            } else {
+                showErr("Server error (status " + r.status + ") — check Cloudflare KV limits or try again later");
+            }
+        })
+        .catch(() => showErr("Network error — is the worker online?"));
 }
 window.login = login;
 function togglePw() { const i = $('pw'); i.type = i.type === 'password' ? 'text' : 'password'; }
