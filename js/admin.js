@@ -39,6 +39,9 @@ async function attemptLogin() {
             loginSec.classList.remove('active');
             dashboardSec.classList.add('active');
             fetchList();
+            // Start admin presence heartbeat + pending request polling
+            startHeartbeat();
+            startPendingPoller();
         } else {
             showErr("Incorrect password or unauthorized.");
         }
@@ -371,3 +374,147 @@ window.resetToken = resetToken;
 window.resetLockout = resetLockout;
 window.copyToClipboard = copyToClipboard;
 window.togglePassword = togglePassword;
+window.approveRequest = approveRequest;
+window.rejectRequest = rejectRequest;
+window.requestFresh = requestFresh;
+
+// ══════════════════════════════════════════════════════════════════════════════
+// CODE REQUEST SYSTEM — pending requests polling + admin heartbeat
+// ══════════════════════════════════════════════════════════════════════════════
+
+const pendingContainer = document.getElementById('pendingRequestsContainer');
+const pendingCount = document.getElementById('pendingCount');
+
+// ─── ADMIN HEARTBEAT (every 10s) ───────────────────────────────────────────────
+// Tells the worker "admin is online" so buyers see the green badge.
+let heartbeatInterval = null;
+
+async function sendHeartbeat() {
+    try {
+        await fetch(`${API_BASE}/api/admin/heartbeat`, {
+            method: 'POST',
+            headers: { 'Authorization': adminAuthToken }
+        });
+    } catch (e) { /* silent */ }
+}
+
+function startHeartbeat() {
+    if (heartbeatInterval) clearInterval(heartbeatInterval);
+    sendHeartbeat(); // immediate first beat
+    heartbeatInterval = setInterval(sendHeartbeat, 10000);
+}
+
+// ─── PENDING REQUESTS POLLING (every 5s) ───────────────────────────────────────
+let pendingPoller = null;
+
+async function fetchPendingRequests() {
+    try {
+        const res = await fetch(`${API_BASE}/api/admin/pending`, {
+            headers: { 'Authorization': adminAuthToken }
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        renderPendingRequests(data.pending || []);
+    } catch (e) { /* silent */ }
+}
+
+function renderPendingRequests(pending) {
+    if (!pendingContainer) return;
+    pendingCount.textContent = pending.length;
+
+    if (pending.length === 0) {
+        pendingContainer.innerHTML = `<p style="color: #707080; font-size: 0.85rem; text-align: center; padding: 1rem 0;">No pending requests. Heartbeat is active — you show as online to buyers.</p>`;
+        return;
+    }
+
+    pendingContainer.innerHTML = '';
+    pending.forEach(req => {
+        const card = document.createElement('div');
+        card.style.cssText = 'background: rgba(25, 25, 35, 0.8); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 14px;';
+
+        const timeAgoStr = req.timeAgo < 60 ? `${req.timeAgo}s ago` : `${Math.floor(req.timeAgo / 60)}m ago`;
+        const statusBadge = req.status === 'request_fresh'
+            ? '<span style="color: #FFA500; font-size: 0.75rem;">🔄 Fresh requested</span>'
+            : '<span style="color: #4CAF50; font-size: 0.75rem;">⏳ Pending</span>';
+
+        card.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
+                <div>
+                    <strong style="color: #fff; font-size: 0.95rem;">${req.buyerUser}</strong><br>
+                    <span style="font-size: 0.75rem; color: #808090;">MS: ${req.msEmail || 'unknown'} · ${timeAgoStr}</span>
+                </div>
+                ${statusBadge}
+            </div>
+            <div style="margin-bottom: 10px;">
+                <img src="${req.screenshot}" alt="Verification screenshot" style="width: 100%; max-width: 400px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1);" onclick="window.open('${req.screenshot}', '_blank')">
+            </div>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <button class="action-btn view" style="background: rgba(76,175,80,0.2); color: #4CAF50; border-color: rgba(76,175,80,0.5); padding: 8px 16px; font-size: 0.85rem;" onclick="approveRequest('${req.requestId}')">✓ Approve & Send Code</button>
+                <button class="action-btn" style="background: rgba(255,76,76,0.15); color: #ff4c4c; border-color: rgba(255,76,76,0.4); padding: 8px 16px; font-size: 0.85rem;" onclick="rejectRequest('${req.requestId}')">✗ Reject</button>
+                <button class="action-btn" style="background: rgba(255,165,0,0.15); color: #FFA500; border-color: rgba(255,165,0,0.4); padding: 8px 16px; font-size: 0.85rem;" onclick="requestFresh('${req.requestId}')">🔄 Ask for Fresh</button>
+            </div>
+        `;
+        pendingContainer.appendChild(card);
+    });
+}
+
+async function approveRequest(requestId) {
+    try {
+        const res = await fetch(`${API_BASE}/api/admin/approve`, {
+            method: 'POST',
+            headers: { 'Authorization': adminAuthToken, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ requestId })
+        });
+        if (!res.ok) throw new Error('Failed to approve');
+        const data = await res.json();
+        dashboardMsg.style.color = '#4CAF50';
+        dashboardMsg.textContent = `✅ Code ${data.code} sent to buyer (expires in ${data.expiresIn}s)`;
+        setTimeout(() => { if (dashboardMsg.textContent.startsWith('✅')) dashboardMsg.textContent = ''; }, 5000);
+        fetchPendingRequests(); // refresh list immediately
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+}
+
+async function rejectRequest(requestId) {
+    const reason = prompt('Rejection reason (shown to buyer):', 'This screenshot does not show a Minecraft launcher verification screen. Please follow the tutorial and try again.');
+    if (reason === null) return; // cancelled
+    try {
+        const res = await fetch(`${API_BASE}/api/admin/reject`, {
+            method: 'POST',
+            headers: { 'Authorization': adminAuthToken, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ requestId, reason })
+        });
+        if (!res.ok) throw new Error('Failed to reject');
+        dashboardMsg.style.color = '#ff4c4c';
+        dashboardMsg.textContent = '✗ Request rejected — buyer notified.';
+        setTimeout(() => { if (dashboardMsg.textContent.startsWith('✗')) dashboardMsg.textContent = ''; }, 3000);
+        fetchPendingRequests();
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+}
+
+async function requestFresh(requestId) {
+    try {
+        const res = await fetch(`${API_BASE}/api/admin/request-fresh`, {
+            method: 'POST',
+            headers: { 'Authorization': adminAuthToken, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ requestId })
+        });
+        if (!res.ok) throw new Error('Failed');
+        dashboardMsg.style.color = '#FFA500';
+        dashboardMsg.textContent = '🔄 Buyer asked to upload a fresh screenshot.';
+        setTimeout(() => { if (dashboardMsg.textContent.startsWith('🔄')) dashboardMsg.textContent = ''; }, 3000);
+        fetchPendingRequests();
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+}
+
+function startPendingPoller() {
+    if (pendingPoller) clearInterval(pendingPoller);
+    fetchPendingRequests(); // immediate first fetch
+    pendingPoller = setInterval(fetchPendingRequests, 5000);
+}
+
