@@ -1,43 +1,29 @@
 // ══════════════════════════════════════════════════════════════════════════════
-// admin.js — V3.1 (background-tab-safe heartbeat + notification sound)
+// admin.js — V3.2 (screenshots inline, cards auto-remove, sound on new)
 // ══════════════════════════════════════════════════════════════════════════════
 
 const API = "https://totp-backend.ibaddie.workers.dev";
 const SITE = window.location.origin + window.location.pathname.replace('/admin.html', '');
 let auth = "";
 const $ = id => document.getElementById(id);
-
-let lastPendingCount = 0;
+let lastPendingIds = new Set();
 
 // ─── NOTIFICATION SOUND ────────────────────────────────────────────────────────
-// Plays a beep using Web Audio API (no external file needed)
 let audioCtx = null;
 function playNotificationSound() {
     try {
         if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.connect(gain); gain.connect(audioCtx.destination);
-        osc.frequency.value = 880;
-        osc.type = 'sine';
-        gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
-        osc.start(audioCtx.currentTime);
-        osc.stop(audioCtx.currentTime + 0.5);
-        // Second beep after 200ms
-        setTimeout(() => {
-            try {
-                const osc2 = audioCtx.createOscillator();
-                const gain2 = audioCtx.createGain();
-                osc2.connect(gain2); gain2.connect(audioCtx.destination);
-                osc2.frequency.value = 1320;
-                osc2.type = 'sine';
-                gain2.gain.setValueAtTime(0.3, audioCtx.currentTime);
-                gain2.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
-                osc2.start(audioCtx.currentTime);
-                osc2.stop(audioCtx.currentTime + 0.5);
-            } catch {}
-        }, 200);
+        [880, 1320].forEach((freq, i) => {
+            setTimeout(() => {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain); gain.connect(audioCtx.destination);
+                osc.frequency.value = freq; osc.type = 'sine';
+                gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
+                osc.start(audioCtx.currentTime); osc.stop(audioCtx.currentTime + 0.5);
+            }, i * 200);
+        });
     } catch {}
 }
 
@@ -51,52 +37,36 @@ function login() {
         .catch(() => showErr("Network error"));
 }
 window.login = login;
-
 function togglePw() { const i = $('pw'); i.type = i.type === 'password' ? 'text' : 'password'; }
 window.togglePw = togglePw;
 
 function logout() {
     fetch(`${API}/api/admin/go-offline`, { method: 'POST', headers: { Authorization: auth } }).catch(() => {});
-    stopHeartbeat(); stopPending();
-    auth = "";
-    location.reload();
+    stopHeartbeat(); stopPending(); auth = ""; location.reload();
 }
 window.logout = logout;
 
-// ─── BEFORE UNLOAD: go offline via fetch keepalive ─────────────────────────────
 window.addEventListener('beforeunload', () => {
-    if (auth) {
-        fetch(`${API}/api/admin/go-offline`, { method: 'POST', headers: { Authorization: auth }, keepalive: true }).catch(() => {});
-    }
+    if (auth) fetch(`${API}/api/admin/go-offline`, { method: 'POST', headers: { Authorization: auth }, keepalive: true }).catch(() => {});
 });
 
-// ─── VISIBILITY CHANGE: send heartbeat immediately when tab becomes visible ────
-// This compensates for browser throttling of setInterval in background tabs.
-// When the admin switches back to the tab, we immediately send a heartbeat so
-// the buyer sees "online" within seconds.
 document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && auth) {
-        beat(); // immediate heartbeat
-        pollPending(); // immediate poll
-    }
+    if (document.visibilityState === 'visible' && auth) { beat(); pollPending(); }
 });
 
-// ─── HEARTBEAT (3s when visible, survives background throttling) ───────────────
+// ─── HEARTBEAT ─────────────────────────────────────────────────────────────────
 let hbTimer = null;
-function startHeartbeat() {
-    stopHeartbeat();
-    beat();
-    // 3s interval — even with browser throttling (which may push it to 10-15s
-    // in background), the 30s threshold in the worker means admin stays "online"
-    hbTimer = setInterval(beat, 3000);
-}
+function startHeartbeat() { stopHeartbeat(); beat(); hbTimer = setInterval(beat, 3000); }
 function stopHeartbeat() { if (hbTimer) { clearInterval(hbTimer); hbTimer = null; } }
 async function beat() { try { await fetch(`${API}/api/admin/heartbeat`, { method: 'POST', headers: { Authorization: auth } }); } catch {} }
 
-// ─── PENDING REQUESTS (3s when visible) ────────────────────────────────────────
+// ─── PENDING REQUESTS ──────────────────────────────────────────────────────────
 let pTimer = null;
-function startPending() { stopPending(); pollPending(); pTimer = setInterval(pollPending, 3000); }
+function startPending() { stopPending(); pollPending(); pTimer = setInterval(pollPending, 4000); }
 function stopPending() { if (pTimer) { clearInterval(pTimer); pTimer = null; } }
+
+// Track which request IDs we've already shown (to detect NEW ones for sound)
+const shownRequestIds = new Set();
 
 async function pollPending() {
     try {
@@ -105,11 +75,11 @@ async function pollPending() {
         const d = await r.json();
         const pending = d.pending || [];
 
-        // Notification sound: if new requests arrived AND tab is not focused
-        if (pending.length > lastPendingCount && document.visibilityState !== 'visible') {
-            playNotificationSound();
-        }
-        lastPendingCount = pending.length;
+        // Sound: new request arrived that we haven't seen before
+        let hasNew = false;
+        pending.forEach(p => { if (!shownRequestIds.has(p.requestId)) hasNew = true; });
+        if (hasNew && document.visibilityState !== 'visible') playNotificationSound();
+        pending.forEach(p => shownRequestIds.add(p.requestId));
 
         renderPending(pending);
     } catch {}
@@ -118,16 +88,20 @@ async function pollPending() {
 function renderPending(pending) {
     $('pCount').textContent = pending.length;
     const c = $('pList');
-    if (!pending.length) { c.innerHTML = '<p style="color:#707080;font-size:0.82rem;text-align:center;padding:0.8rem 0;">No pending requests</p>'; return; }
+    if (!pending.length) {
+        c.innerHTML = '<p style="color:#707080;font-size:0.82rem;text-align:center;padding:0.8rem 0;">No pending requests</p>';
+        return;
+    }
     c.innerHTML = '';
     pending.forEach(r => {
         const ago = r.timeAgo < 60 ? `${r.timeAgo}s ago` : `${Math.floor(r.timeAgo / 60)}m ago`;
         const st = r.status === 'request_fresh' ? '🔄 Fresh requested' : '⏳ Pending';
         const card = document.createElement('div');
         card.className = 'req-card';
+        card.id = 'card-' + r.requestId;
         card.innerHTML = `
             <div class="req-info"><div><strong>${r.buyerUser}</strong><br><span>MS: ${r.msEmail||'?'} · ${ago}</span></div><span style="font-size:0.72rem;color:${r.status==='request_fresh'?'#FFA500':'#4CAF50'};">${st}</span></div>
-            <div id="img-${r.requestId}" style="margin-bottom:10px;"><button class="act-btn view" onclick="loadScreenshot('${r.requestId}')">📸 View Screenshot</button></div>
+            <img class="req-img" src="${r.screenshot}" onclick="window.open('${r.screenshot}')">
             <div class="req-btns">
                 <button class="req-btn approve" onclick="approve('${r.requestId}')">✓ Approve</button>
                 <button class="req-btn reject" onclick="reject('${r.requestId}')">✗ Reject</button>
@@ -137,29 +111,30 @@ function renderPending(pending) {
     });
 }
 
-// ─── LOAD SCREENSHOT ON DEMAND ─────────────────────────────────────────────────
-async function loadScreenshot(requestId) {
-    const container = $('img-' + requestId);
-    if (!container) return;
-    container.innerHTML = '<p style="color:#808090;font-size:0.78rem;">Loading screenshot...</p>';
-    try {
-        const r = await fetch(`${API}/api/admin/pending-screenshot?requestId=${requestId}`, { headers: { Authorization: auth } });
-        if (!r.ok) throw new Error('Failed');
-        const d = await r.json();
-        container.innerHTML = `<img class="req-img" src="${d.screenshot}" onclick="window.open('${d.screenshot}')">`;
-    } catch (e) {
-        container.innerHTML = '<p style="color:#ff4c4c;font-size:0.78rem;">Failed to load</p>';
+// Remove a card from the DOM immediately after action
+function removeCard(requestId) {
+    const card = $('card-' + requestId);
+    if (card) {
+        card.style.transition = 'opacity 0.3s, transform 0.3s';
+        card.style.opacity = '0';
+        card.style.transform = 'translateX(20px)';
+        setTimeout(() => card.remove(), 300);
     }
 }
-window.loadScreenshot = loadScreenshot;
 
 async function approve(id) {
     try {
         const r = await fetch(`${API}/api/admin/approve`, { method: 'POST', headers: { Authorization: auth, 'Content-Type': 'application/json' }, body: JSON.stringify({ requestId: id }) });
         if (!r.ok) throw new Error('Failed');
         const d = await r.json();
-        showMsg(`✅ Code ${d.code} sent (expires ${d.expiresIn}s)`);
-        pollPending();
+        // Only show the code if it's not null (not in needsFreshWindow mode)
+        if (d.code) {
+            showMsg(`✅ Code ${d.code} sent to buyer (${d.expiresIn}s)`);
+        } else {
+            showMsg(`✅ Approved — buyer will see fresh code shortly`);
+        }
+        removeCard(id); // remove immediately
+        pollPending(); // refresh
     } catch (e) { alert('Error: ' + e.message); }
 }
 window.approve = approve;
@@ -170,7 +145,8 @@ async function reject(id) {
     try {
         const r = await fetch(`${API}/api/admin/reject`, { method: 'POST', headers: { Authorization: auth, 'Content-Type': 'application/json' }, body: JSON.stringify({ requestId: id, reason }) });
         if (!r.ok) throw new Error('Failed');
-        showMsg('✗ Rejected');
+        showMsg('✗ Rejected — buyer notified');
+        removeCard(id);
         pollPending();
     } catch (e) { alert('Error: ' + e.message); }
 }
@@ -181,6 +157,7 @@ async function fresh(id) {
         const r = await fetch(`${API}/api/admin/request-fresh`, { method: 'POST', headers: { Authorization: auth, 'Content-Type': 'application/json' }, body: JSON.stringify({ requestId: id }) });
         if (!r.ok) throw new Error('Failed');
         showMsg('🔄 Buyer asked for fresh screenshot');
+        removeCard(id);
         pollPending();
     } catch (e) { alert('Error: ' + e.message); }
 }
@@ -206,7 +183,7 @@ function render(keys) {
         const m = k.metadata || {};
         const link = `${SITE}/request.html?token=${k.name}`;
         const tr = document.createElement('tr');
-        tr.innerHTML = `<td><strong>${m.user||'?'}</strong>${m.hasPending?'<br><span style="color:#ff4c4c;font-size:0.72rem;">⏳ Has pending request</span>':''}</td>
+        tr.innerHTML = `<td><strong>${m.user||'?'}</strong>${m.hasPending?'<br><span style="color:#ff4c4c;font-size:0.72rem;">⏳ Pending request</span>':''}</td>
             <td><span class="meta">${m.msEmail||'—'}</span></td>
             <td><a class="copy-link" onclick="copy('${link}')">Copy Link</a></td>
             <td><button class="act-btn view" onclick="viewCode('${k.name}')">View Code</button><button class="act-btn danger" onclick="del('${k.name}')">Delete</button></td>`;
@@ -250,5 +227,5 @@ window.addToken = addToken;
 function copy(text) { navigator.clipboard.writeText(text).then(() => { showMsg('📋 Copied!'); setTimeout(() => { if (($('msg').textContent||'').startsWith('📋')) $('msg').textContent = ''; }, 2000); }).catch(() => alert(text)); }
 window.copy = copy;
 
-function showMsg(m) { $('msg').textContent = m; $('msg').style.color = '#4CAF50'; setTimeout(() => { if (($('msg').textContent||'').startsWith('✅')||($('msg').textContent||'').startsWith('✗')||($('msg').textContent||'').startsWith('🔄')||($('msg').textContent||'').startsWith('📋')) $('msg').textContent=''; }, 4000); }
+function showMsg(m) { $('msg').textContent = m; $('msg').style.color = '#4CAF50'; setTimeout(() => { $('msg').textContent=''; }, 4000); }
 function showErr(m) { $('err').textContent = m; }
