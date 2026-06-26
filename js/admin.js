@@ -228,9 +228,13 @@ window.del = del;
 async function addToken() {
     const user = $('nUser').value.trim(), ms = $('nMs').value.trim(), secret = $('nSecret').value.trim();
     if (!user || !secret) return showErr('Buyer email + secret required');
+    showMsg('Generating...');
     try {
         const r = await fetch(`${API}/api/admin/create-token`, { method: 'POST', headers: { Authorization: auth, 'Content-Type': 'application/json' }, body: JSON.stringify({ user, secret, msEmail: ms || undefined }) });
-        if (!r.ok) throw new Error('Failed');
+        if (!r.ok) {
+            const errData = await r.json().catch(() => ({}));
+            throw new Error(errData.error || 'status ' + r.status);
+        }
         const d = await r.json();
         const link = `${SITE}/request.html?token=${d.token}`;
         copy(link);
