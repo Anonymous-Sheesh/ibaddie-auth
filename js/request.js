@@ -164,7 +164,21 @@ async function poll() {
             stopPolling(); hideAll();
             $('rejectBox').style.display = 'block';
             $('rejectReason').textContent = d.rejectionReason || 'Please follow the guide and try again.';
-            setTimeout(() => { $('rejectBox').style.display='none'; $('reqBtn').style.display='block'; $('reqBtn').disabled=false; }, 4000);
+            // Show a "Try Again" button below the rejection — stays until buyer clicks it
+            if (!$('tryAgainBtn')) {
+                const btn = document.createElement('button');
+                btn.id = 'tryAgainBtn';
+                btn.className = 'big-btn';
+                btn.style.marginTop = '1rem';
+                btn.textContent = '🔄 Try Again';
+                btn.onclick = () => {
+                    $('rejectBox').style.display = 'none';
+                    btn.remove();
+                    $('reqBtn').style.display = 'block';
+                    $('reqBtn').disabled = false;
+                };
+                $('rejectBox').parentNode.insertBefore(btn, $('rejectBox').nextSibling);
+            }
         }
     } catch {}
 }
@@ -235,7 +249,25 @@ async function checkExisting() {
         if (d.status === 'pending') { hideAll(); $('reqBtn').style.display='none'; startPolling(); }
         else if (d.status === 'approved_pending') { hideAll(); $('reqBtn').style.display='none'; $('codeBox').style.display='block'; $('codeNum').textContent='······'; $('codeNum').style.color='#ff4c4c'; startPendingCountdown(d.waitSeconds||5); startPolling(); }
         else if (d.status === 'approved' && d.code && d.codeExpiresIn > 0) { hideAll(); $('reqBtn').style.display='none'; $('codeBox').style.display='block'; $('codeNum').textContent=d.code; $('codeNum').style.color='#FFD700'; currentCode=d.code; startCountdown(d.codeExpiresIn); }
-        else if (d.status === 'rejected') { hideAll(); $('reqBtn').style.display='none'; $('rejectBox').style.display='block'; $('rejectReason').textContent=d.rejectionReason||'Try again.'; setTimeout(()=>{$('rejectBox').style.display='none';$('reqBtn').style.display='block';$('reqBtn').disabled=false;},4000); }
+        else if (d.status === 'rejected') {
+            hideAll(); $('reqBtn').style.display='none';
+            $('rejectBox').style.display='block';
+            $('rejectReason').textContent=d.rejectionReason||'Try again.';
+            if (!$('tryAgainBtn')) {
+                const btn = document.createElement('button');
+                btn.id = 'tryAgainBtn';
+                btn.className = 'big-btn';
+                btn.style.marginTop = '1rem';
+                btn.textContent = '🔄 Try Again';
+                btn.onclick = () => {
+                    $('rejectBox').style.display = 'none';
+                    btn.remove();
+                    $('reqBtn').style.display = 'block';
+                    $('reqBtn').disabled = false;
+                };
+                $('rejectBox').parentNode.insertBefore(btn, $('rejectBox').nextSibling);
+            }
+        }
     } catch {}
 }
 
@@ -245,4 +277,7 @@ function hideAll() {
     $('waitArea').style.display = 'none';
     $('codeBox').style.display = 'none';
     $('rejectBox').style.display = 'none';
+    // Remove Try Again button if it exists
+    const tab = $('tryAgainBtn');
+    if (tab) tab.remove();
 }
