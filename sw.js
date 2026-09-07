@@ -1,4 +1,4 @@
-const CACHE_NAME = 'totp.codes-v1.7';
+const CACHE_NAME = 'totp.codes-v1.8';
 const FETCH_TIMEOUT = 5000; // 5 seconds
 
 function fetchWithTimeout(request) {
@@ -33,6 +33,7 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
+  if (event.request.method !== 'GET' || new URL(event.request.url).pathname.startsWith('/api/')) return;
   event.respondWith(
     fetchWithTimeout(event.request)
       .then((networkResponse) => {
