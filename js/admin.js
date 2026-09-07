@@ -1,12 +1,12 @@
 // ══════════════════════════════════════════════════════════════════════════════
-// admin.js — V3.2 (screenshots inline, cards auto-remove, sound on new)
+// admin.js — V4 (account dates, reuse history and bulk selection)
 // ══════════════════════════════════════════════════════════════════════════════
 
 const API = "https://totp-backend.ibaddie.workers.dev";
 const SITE = window.location.origin + window.location.pathname.replace('/admin.html', '');
 let auth = "";
 const $ = id => document.getElementById(id);
-let lastPendingIds = new Set();
+
 
 // ─── NOTIFICATION SOUND ────────────────────────────────────────────────────────
 let audioCtx = null;
@@ -68,14 +68,19 @@ window.addEventListener('beforeunload', () => {
 });
 
 document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && auth) { beat(); pollPending(); }
+    if (document.visibilityState === 'visible' && auth) { beat(); pollPending(); if (!deleting) renderAccounts(); }
 });
 
 // ─── HEARTBEAT ─────────────────────────────────────────────────────────────────
 let hbTimer = null;
 function startHeartbeat() { stopHeartbeat(); beat(); hbTimer = setInterval(beat, 3000); }
 function stopHeartbeat() { if (hbTimer) { clearInterval(hbTimer); hbTimer = null; } }
-async function beat() { try { await fetch(`${API}/api/admin/heartbeat`, { method: 'POST', headers: { Authorization: auth } }); } catch {} }
+async function beat() {
+    try {
+        const response = await fetch(`${API}/api/admin/heartbeat`, { method: 'POST', headers: { Authorization: auth } });
+        $('presenceBadge').textContent = response.ok ? '● Online to buyers' : 'Connection interrupted';
+    } catch { $('presenceBadge').textContent = 'Connection interrupted'; }
+}
 
 // ─── PENDING REQUESTS ──────────────────────────────────────────────────────────
 let pTimer = null;
@@ -104,28 +109,28 @@ async function pollPending() {
 
 function renderPending(pending) {
     $('pCount').textContent = pending.length;
-    const c = $('pList');
-    if (!pending.length) {
-        c.innerHTML = '<p style="color:#707080;font-size:0.82rem;text-align:center;padding:0.8rem 0;">No pending requests</p>';
-        return;
+    const container = $('pList');
+    container.replaceChildren();
+    if (!pending.length) { container.innerHTML = '<p class="empty">All caught up. No pending requests.</p>'; return; }
+    for (const r of pending) {
+        const card = document.createElement('div'); card.className = 'req-card'; card.id = 'card-' + r.requestId;
+        const info = document.createElement('div'); info.className = 'req-info';
+        const label = document.createElement('strong'); label.textContent = r.buyerUser;
+        const status = document.createElement('span');
+        status.textContent = (r.status === 'request_fresh' ? 'Fresh requested' : 'Pending') + ' · ' + (r.timeAgo < 60 ? r.timeAgo + 's ago' : Math.floor(r.timeAgo / 60) + 'm ago');
+        info.append(label, status); card.appendChild(info);
+        const email = document.createElement('p'); email.className = 'muted small'; email.textContent = 'MS: ' + (r.msEmail || '?'); card.appendChild(email);
+        if (typeof r.screenshot === 'string' && /^(https?:\/\/|data:image\/(png|jpeg|jpg|webp);base64,)/i.test(r.screenshot)) {
+            const image = document.createElement('img'); image.className = 'req-img'; image.src = r.screenshot; image.alt = 'Launcher screenshot from ' + r.buyerUser;
+            image.addEventListener('click', () => window.open(r.screenshot, '_blank', 'noopener,noreferrer')); card.appendChild(image);
+        }
+        const buttons = document.createElement('div'); buttons.className = 'req-btns';
+        for (const [text, css, action] of [['Approve', 'approve', approve], ['Reject', 'reject', reject], ['Ask fresh', 'fresh', fresh]]) {
+            const button = document.createElement('button'); button.className = 'req-btn ' + css; button.textContent = text;
+            button.addEventListener('click', () => action(r.requestId)); buttons.appendChild(button);
+        }
+        card.appendChild(buttons); container.appendChild(card);
     }
-    c.innerHTML = '';
-    pending.forEach(r => {
-        const ago = r.timeAgo < 60 ? `${r.timeAgo}s ago` : `${Math.floor(r.timeAgo / 60)}m ago`;
-        const st = r.status === 'request_fresh' ? '🔄 Fresh requested' : '⏳ Pending';
-        const card = document.createElement('div');
-        card.className = 'req-card';
-        card.id = 'card-' + r.requestId;
-        card.innerHTML = `
-            <div class="req-info"><div><strong>${r.buyerUser}</strong><br><span>MS: ${r.msEmail||'?'} · ${ago}</span></div><span style="font-size:0.72rem;color:${r.status==='request_fresh'?'#FFA500':'#4CAF50'};">${st}</span></div>
-            <img class="req-img" src="${r.screenshot}" onclick="window.open('${r.screenshot}')">
-            <div class="req-btns">
-                <button class="req-btn approve" onclick="approve('${r.requestId}')">✓ Approve</button>
-                <button class="req-btn reject" onclick="reject('${r.requestId}')">✗ Reject</button>
-                <button class="req-btn fresh" onclick="fresh('${r.requestId}')">🔄 Ask Fresh</button>
-            </div>`;
-        c.appendChild(card);
-    });
 }
 
 // Remove a card from the DOM immediately after action
@@ -180,73 +185,249 @@ async function fresh(id) {
 }
 window.fresh = fresh;
 
-// ─── TOKEN LIST ────────────────────────────────────────────────────────────────
+// Account directory: selections refer to stable token IDs, never row positions.
+let accounts = [], visibleAccounts = [], selecting = false, listLoading = false, deleting = false;
+let trackingReady = false, deleteTargets = [], messageTimer;
+const selected = new Set(), deletedThisSession = new Set(), reuseBusy = new Set();
+const recentReuseEvents = new Map(), retryReuseIds = new Map();
+const { dateLabel, daysAgo } = AccountDates;
+const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+
+async function adminRequest(path, body) {
+    const response = await fetch(`${API}/api/admin/${path}`, {
+        method: body === undefined ? 'GET' : 'POST', cache: 'no-store',
+        headers: { Authorization: auth, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (response.status === 401) { logout(); throw new Error('Session expired. Please sign in again.'); }
+    if (!response.ok) throw new Error(data.error || `Request failed (${response.status}). Please retry.`);
+    return data;
+}
+
 async function fetchList() {
-    $('tbl').innerHTML = '<tr><td colspan="4" style="text-align:center;">Loading...</td></tr>';
+    if (listLoading || deleting) return;
+    listLoading = true; $('refreshBtn').disabled = true;
+    $('listStatus').textContent = 'Refreshing accounts…';
     try {
-        const r = await fetch(`${API}/api/admin/list`, { headers: { Authorization: auth } });
-        if (!r.ok) { if (r.status === 401) return location.reload(); throw new Error('Failed'); }
-        const d = await r.json();
-        render(d.keys || []);
-    } catch (e) { showErr('Error: ' + e.message); }
+        const data = await adminRequest('list');
+        if (!Array.isArray(data.keys)) throw new Error('The server returned an invalid account list.');
+        trackingReady = data.trackingVersion === 1;
+        accounts = data.keys.filter(k => !deletedThisSession.has(k.name));
+        for (const account of accounts) mergeReuseHistory(account);
+        const ids = new Set(accounts.map(k => k.name));
+        for (const id of selected) if (!ids.has(id)) selected.delete(id);
+        renderAccounts();
+        if (!trackingReady) showErr('Deploy the updated Worker to enable saved dates, reuse tracking and bulk deletion.');
+        if (data.note) showErr(data.note);
+    } catch (e) {
+        $('listStatus').textContent = 'Could not refresh. Any accounts below are from the last successful load.';
+        showErr(e.message);
+    } finally { listLoading = false; $('refreshBtn').disabled = false; }
 }
 window.fetchList = fetchList;
 
-function render(keys) {
-    if (!keys.length) { $('tbl').innerHTML = '<tr><td colspan="4" style="text-align:center;">No accounts yet</td></tr>'; return; }
-    const sorted = [...keys].sort((a, b) => ((b.metadata||{}).createdAt||0) - ((a.metadata||{}).createdAt||0));
-    $('tbl').innerHTML = '';
-    sorted.forEach(k => {
-        const m = k.metadata || {};
-        const link = `${SITE}/request.html?token=${k.name}`;
-        const tr = document.createElement('tr');
-        tr.innerHTML = `<td><strong>${m.user||'?'}</strong>${m.hasPending?'<br><span style="color:#ff4c4c;font-size:0.72rem;">⏳ Pending request</span>':''}</td>
-            <td><span class="meta">${m.msEmail||'—'}</span></td>
-            <td><a class="copy-link" onclick="copy('${link}')">Copy Link</a></td>
-            <td><button class="act-btn view" onclick="viewCode('${k.name}')">View Code</button><button class="act-btn danger" onclick="del('${k.name}')">Delete</button></td>`;
-        $('tbl').appendChild(tr);
+function mergeReuseHistory(account) {
+    const m = account.metadata ||= {};
+    const events = new Map((m.reuseHistory || []).map(e => [e.id, e]));
+    for (const event of recentReuseEvents.get(account.name) || []) events.set(event.id, event);
+    m.reuseHistory = [...events.values()].sort((a, b) => b.at - a.at || a.id.localeCompare(b.id));
+    m.reuseCount = m.reuseHistory.length;
+    m.lastReusedAt = m.reuseHistory[0]?.at || null;
+}
+
+function renderAccounts() {
+    const query = $('accountSearch').value.trim().toLowerCase();
+    visibleAccounts = accounts.filter(k => `${k.metadata.user} ${k.metadata.msEmail || ''}`.toLowerCase().includes(query));
+    const sort = $('accountSort').value;
+    visibleAccounts.sort((a, b) => {
+        const x = a.metadata, y = b.metadata;
+        if (sort === 'oldest') return x.createdAt - y.createdAt;
+        if (sort === 'reused') return (y.lastReusedAt || 0) - (x.lastReusedAt || 0);
+        if (sort === 'count') return y.reuseCount - x.reuseCount;
+        return y.createdAt - x.createdAt;
     });
+    $('totalAccounts').textContent = accounts.length;
+    $('accountCount').textContent = accounts.length;
+    $('reusedAccounts').textContent = accounts.filter(k => k.metadata.reuseCount > 0).length;
+    $('totalReuses').textContent = accounts.reduce((sum, k) => sum + k.metadata.reuseCount, 0);
+    $('listStatus').textContent = `${visibleAccounts.length} of ${accounts.length} accounts`;
+    $('tbl').innerHTML = visibleAccounts.map(k => {
+        const m = k.metadata, id = escapeHtml(k.name);
+        return `<tr data-token="${id}" class="${selected.has(k.name) ? 'selected' : ''}">
+            <td class="selection-cell" ${selecting ? '' : 'hidden'}><input type="checkbox" data-select="${id}" aria-label="Select ${escapeHtml(m.user)}" ${selected.has(k.name) ? 'checked' : ''} ${deleting ? 'disabled' : ''}></td>
+            <td class="account-cell" data-label="Buyer"><strong>${escapeHtml(m.user || '?')}</strong>${m.hasPending ? '<span class="sub pending-label">Pending request</span>' : ''}</td>
+            <td class="account-cell" data-label="MS email">${escapeHtml(m.msEmail || '—')}</td>
+            <td class="date-cell" data-label="Added">${trackingReady ? dateLabel(m.createdAt) : 'Update required'}<span class="sub">${trackingReady ? (m.addedDateEstimated ? 'Assigned to existing account' : daysAgo(m.createdAt)) : 'Deploy updated Worker'}</span></td>
+            <td class="date-cell" data-label="Reuse activity"><span class="reuse-badge">${m.reuseCount ? `${m.reuseCount} ${m.reuseCount === 1 ? 'reuse' : 'reuses'}` : 'Not reused'}</span>${m.lastReusedAt ? `<span class="sub">${daysAgo(m.lastReusedAt)} · ${dateLabel(m.lastReusedAt)}</span><button class="link-btn" data-action="history" data-id="${id}">View history</button>` : '<span class="sub">No reuse recorded</span>'}</td>
+            <td data-label="Delivery"><button class="link-btn" data-action="copy" data-id="${id}">Copy link</button></td>
+            <td data-label="Actions"><div class="actions"><button data-action="reuse" data-id="${id}" ${!trackingReady || reuseBusy.has(k.name) || deleting ? 'disabled' : ''}>${reuseBusy.has(k.name) ? 'Saving…' : retryReuseIds.has(k.name) ? 'Retry save' : '↻ Mark reused'}</button><button data-action="view" data-id="${id}" ${deleting ? 'disabled' : ''}>View code</button><button class="danger" data-action="delete" data-id="${id}" ${deleting || !trackingReady ? 'disabled' : ''}>Delete</button></div></td>
+        </tr>`;
+    }).join('') || `<tr><td colspan="7" class="empty">${query ? 'No matching accounts. Try another email.' : 'No accounts yet. Add your first account above.'}</td></tr>`;
+    updateSelection();
+}
+
+function updateSelection() {
+    $('selectBtn').textContent = selecting ? 'Done selecting' : 'Select accounts';
+    $('selectBtn').setAttribute('aria-pressed', String(selecting));
+    document.querySelector('th.selection-cell').hidden = !selecting;
+    $('selectionBar').hidden = !selecting;
+    $('selectionCount').textContent = `${selected.size} selected`;
+    $('bulkDeleteBtn').textContent = `Delete selected${selected.size ? ` (${selected.size})` : ''}`;
+    $('bulkDeleteBtn').disabled = !selected.size || deleting || !trackingReady;
+    const count = visibleAccounts.filter(k => selected.has(k.name)).length;
+    $('selectAll').checked = !!visibleAccounts.length && count === visibleAccounts.length;
+    $('selectAll').indeterminate = count > 0 && count < visibleAccounts.length;
+    $('selectAll').disabled = !visibleAccounts.length || deleting;
+}
+function toggleSelection() { if (deleting) return; selecting = !selecting; selected.clear(); renderAccounts(); }
+function clearSelection() { if (deleting) return; selected.clear(); renderAccounts(); }
+$('selectAll').addEventListener('change', event => {
+    for (const k of visibleAccounts) event.target.checked ? selected.add(k.name) : selected.delete(k.name);
+    renderAccounts();
+});
+$('accountSearch').addEventListener('input', () => { selected.clear(); renderAccounts(); });
+$('accountSort').addEventListener('change', renderAccounts);
+$('tbl').addEventListener('change', event => {
+    const id = event.target.dataset.select;
+    if (!id || deleting) return;
+    event.target.checked ? selected.add(id) : selected.delete(id);
+    event.target.closest('tr').classList.toggle('selected', event.target.checked);
+    updateSelection();
+});
+$('tbl').addEventListener('click', event => {
+    const button = event.target.closest('button[data-action]');
+    if (!button || button.disabled) return;
+    const id = button.dataset.id;
+    const actions = { reuse: markReused, history: showHistory, view: viewCode, delete: openDelete, copy: id => copy(`${SITE}/request.html?token=${encodeURIComponent(id)}`) };
+    actions[button.dataset.action]?.(id);
+});
+
+async function markReused(id) {
+    if (reuseBusy.has(id) || deleting || !trackingReady) return;
+    reuseBusy.add(id);
+    const eventId = retryReuseIds.get(id) || crypto.randomUUID();
+    retryReuseIds.set(id, eventId); // Reuse this identity if the response is lost.
+    renderAccounts();
+    try {
+        const data = await adminRequest('mark-reused', { token: id, eventId });
+        if (!data.event?.id || !Number.isFinite(data.event.at)) throw new Error('Save was not confirmed. Retry save to check this reuse.');
+        const events = recentReuseEvents.get(id) || [];
+        if (!events.some(e => e.id === data.event.id)) events.push(data.event);
+        recentReuseEvents.set(id, events);
+        const account = accounts.find(k => k.name === id);
+        if (account) {
+            mergeReuseHistory(account);
+            showMsg(`Reused ${account.metadata.msEmail || account.metadata.user} today. Total: ${account.metadata.reuseCount}.`);
+        }
+        retryReuseIds.delete(id);
+    } catch (e) { showErr(`${e.message} Click Retry save to confirm this same reuse without adding another.`); }
+    finally { reuseBusy.delete(id); renderAccounts(); }
+}
+
+function showHistory(id) {
+    const account = accounts.find(k => k.name === id);
+    if (!account) return;
+    $('historyAccount').textContent = account.metadata.msEmail || account.metadata.user;
+    $('historyList').replaceChildren();
+    account.metadata.reuseHistory.forEach((event, i, events) => {
+        const li = document.createElement('li');
+        li.textContent = `Reuse #${events.length - i} · ${dateLabel(event.at)} · ${daysAgo(event.at)}`;
+        const time = document.createElement('small');
+        time.textContent = new Date(event.at).toLocaleTimeString();
+        li.appendChild(time); $('historyList').appendChild(li);
+    });
+    $('historyDialog').showModal();
+}
+
+function openDelete(id) {
+    if (deleting || !trackingReady) return;
+    deleteTargets = id ? [id] : [...selected];
+    if (!deleteTargets.length) return;
+    $('deleteTitle').textContent = `Delete ${deleteTargets.length} ${deleteTargets.length === 1 ? 'account' : 'accounts'}?`;
+    $('deleteSummary').textContent = 'Review the accounts selected for permanent deletion:';
+    $('deleteList').replaceChildren();
+    for (const token of deleteTargets) {
+        const account = accounts.find(k => k.name === token);
+        const li = document.createElement('li');
+        li.textContent = `${account?.metadata.user || token} — ${account?.metadata.msEmail || 'No MS email'}`;
+        $('deleteList').appendChild(li);
+    }
+    $('confirmDeleteBtn').textContent = `Delete ${deleteTargets.length} ${deleteTargets.length === 1 ? 'account' : 'accounts'}`;
+    $('deleteDialog').showModal();
+}
+$('deleteDialog').addEventListener('cancel', event => { if (deleting) event.preventDefault(); });
+
+async function confirmDelete() {
+    if (deleting || !deleteTargets.length) return;
+    deleting = true;
+    for (const id of ['cancelDeleteBtn', 'confirmDeleteBtn', 'refreshBtn', 'selectBtn', 'accountSearch', 'accountSort', 'addBtn']) $(id).disabled = true;
+    renderAccounts();
+    const targets = [...deleteTargets], failed = [];
+    let removed = 0;
+    try {
+        for (let offset = 0; offset < targets.length; offset += 100) {
+            const batch = targets.slice(offset, offset + 100);
+            $('confirmDeleteBtn').textContent = `Deleting ${offset + 1}–${offset + batch.length}…`;
+            try {
+                const result = await adminRequest('delete-tokens', { tokens: batch });
+                if (!Array.isArray(result.deleted)) throw new Error('Deletion was not confirmed.');
+                for (const id of batch) {
+                    if (result.deleted.includes(id)) { deletedThisSession.add(id); selected.delete(id); removed++; }
+                    else failed.push(id);
+                }
+            } catch (e) { failed.push(...batch); }
+            if (offset + 100 < targets.length) await new Promise(resolve => setTimeout(resolve, 1100));
+        }
+        accounts = accounts.filter(k => !deletedThisSession.has(k.name));
+        if (failed.length) {
+            selecting = true; failed.forEach(id => selected.add(id));
+            showErr(`${removed} deleted. ${failed.length} could not be confirmed and remain selected. Refresh to verify before retrying.`);
+        } else showMsg(`${removed} ${removed === 1 ? 'account' : 'accounts'} permanently deleted.`);
+        pollPending();
+    } finally {
+        deleting = false; deleteTargets = [];
+        for (const id of ['cancelDeleteBtn', 'confirmDeleteBtn', 'refreshBtn', 'selectBtn', 'accountSearch', 'accountSort', 'addBtn']) $(id).disabled = false;
+        $('deleteDialog').close(); renderAccounts();
+    }
 }
 
 async function viewCode(id) {
     try {
-        const r = await fetch(`${API}/api/admin/view-code?token=${id}`, { headers: { Authorization: auth } });
-        if (!r.ok) throw new Error('Failed');
-        const d = await r.json();
-        alert(`Code: ${d.code}\nExpires in: ${d.expiresIn}s\n\nBuyer: ${d.user}\nMS: ${d.msEmail||'?'}`);
-    } catch (e) { alert('Error: ' + e.message); }
+        const d = await adminRequest(`view-code?token=${encodeURIComponent(id)}`);
+        alert(`Code: ${d.code}\nExpires in: ${d.expiresIn}s\n\nBuyer: ${d.user}\nMS: ${d.msEmail || '?'}`);
+    } catch (e) { showErr(e.message); }
 }
 window.viewCode = viewCode;
-
-async function del(id) {
-    if (!confirm('Delete this account permanently?')) return;
-    try { await fetch(`${API}/api/admin/delete-token`, { method: 'POST', headers: { Authorization: auth, 'Content-Type': 'application/json' }, body: JSON.stringify({ token: id }) }); fetchList(); }
-    catch (e) { alert('Error: ' + e.message); }
-}
-window.del = del;
+window.del = openDelete;
 
 async function addToken() {
     const user = $('nUser').value.trim(), ms = $('nMs').value.trim(), secret = $('nSecret').value.trim();
-    if (!user || !secret) return showErr('Buyer email + secret required');
-    showMsg('Generating...');
+    if (!user || !secret) return showErr('Buyer email / label and secret are required.');
+    if ($('addBtn').disabled) return;
+    $('addBtn').disabled = true;
     try {
-        const r = await fetch(`${API}/api/admin/create-token`, { method: 'POST', headers: { Authorization: auth, 'Content-Type': 'application/json' }, body: JSON.stringify({ user, secret, msEmail: ms || undefined }) });
-        if (!r.ok) {
-            const errData = await r.json().catch(() => ({}));
-            throw new Error(errData.error || 'status ' + r.status);
-        }
-        const d = await r.json();
-        const link = `${SITE}/request.html?token=${d.token}`;
-        copy(link);
-        showMsg('✅ Link generated & copied!');
+        const data = await adminRequest('create-token', { user, secret, msEmail: ms || undefined });
         $('nUser').value = ''; $('nMs').value = ''; $('nSecret').value = '';
-        fetchList();
-    } catch (e) { showErr('Error: ' + e.message); }
+        await copy(`${SITE}/request.html?token=${encodeURIComponent(data.token)}`, 'Account added. Delivery link copied!');
+        await fetchList();
+    } catch (e) { showErr(e.message); }
+    finally { $('addBtn').disabled = false; }
 }
 window.addToken = addToken;
-
-function copy(text) { navigator.clipboard.writeText(text).then(() => { showMsg('📋 Copied!'); setTimeout(() => { if (($('msg').textContent||'').startsWith('📋')) $('msg').textContent = ''; }, 2000); }).catch(() => alert(text)); }
+async function copy(text, message = 'Delivery link copied!') {
+    try { await navigator.clipboard.writeText(text); showMsg(message); }
+    catch { prompt('Copy this delivery link:', text); }
+}
 window.copy = copy;
-
-function showMsg(m) { $('msg').textContent = m; $('msg').style.color = '#4CAF50'; setTimeout(() => { $('msg').textContent=''; }, 4000); }
-function showErr(m) { $('err').textContent = m; }
+function showMsg(message) {
+    clearTimeout(messageTimer); $('msg').textContent = message; $('msg').style.color = '#97ddb5';
+    messageTimer = setTimeout(() => { $('msg').textContent = ''; }, 8000);
+}
+function showErr(message) {
+    if ($('dashSec').classList.contains('active')) {
+        clearTimeout(messageTimer); $('msg').textContent = message; $('msg').style.color = '#ff9c9c';
+    } else $('err').textContent = message;
+}
+// Refresh relative-day labels on long-running pages, including after midnight.
+setInterval(() => { if (auth && !deleting && !listLoading) renderAccounts(); }, 60000);
