@@ -67,6 +67,7 @@
         .link.gold:hover { border-bottom-color:#FFD700; }
         @media(max-width:600px){ .req-card{padding:1.5rem 1.2rem;} .req-hero h1{font-size:1.9rem;} .code-num{font-size:42px;letter-spacing:4px;} }
     </style>
+    <link rel="stylesheet" href="./css/request-enhancements.css?v=3.2">
 </head>
 <body class="preload req-body">
     <div class="background-anim"></div>
@@ -76,8 +77,8 @@
             <p class="sub">Code Request</p>
         </div>
 
-        <div id="badge" class="badge badge-off" style="display:none;">
-            <span class="dot"></span><span id="badgeText">Checking...</span>
+        <div id="badge" class="badge badge-on" style="display:inline-flex;">
+            <span class="dot"></span><span id="badgeText">Ibaddie is online</span>
         </div>
 
         <button id="reqBtn" class="big-btn" disabled>📸 Request Code</button>
@@ -95,14 +96,55 @@
         </div>
 
         <div id="codeBox" class="code-box">
+            <div class="code-success" id="codeSuccess">✅ Screenshot accepted — your code is ready!</div>
             <div class="code-num" id="codeNum">000000</div>
             <div class="code-timer" id="codeTimer">Expires in 30s</div>
             <div class="code-hint">👆 Click code to copy · Enter in launcher NOW!</div>
         </div>
 
-        <div id="rejectBox" class="reject">
-            <div class="reject-title">❌ Request Rejected</div>
-            <div class="reject-reason" id="rejectReason"></div>
+        <div id="rejectBox" class="reject" role="alert">
+            <div class="reject-heading">
+                <div class="reject-icon" aria-hidden="true">✕</div>
+                <div class="reject-title">Screenshot rejected</div>
+                <div class="reject-subtitle">Look at the pictures below, then try again.</div>
+            </div>
+            <div class="reject-reason-wrap">
+                <span class="reject-reason-icon" aria-hidden="true">💬</span>
+                <div>
+                    <span class="reject-reason-label">WHAT WAS WRONG</span>
+                    <div class="reject-reason" id="rejectReason"></div>
+                </div>
+            </div>
+            <div class="compare-grid">
+                <section class="compare-card bad" aria-labelledby="yourShotLabel">
+                    <div class="compare-label" id="yourShotLabel"><span class="compare-symbol" aria-hidden="true">✕</span> Your screenshot</div>
+                    <div class="shot-frame">
+                        <img id="rejectedScreenshot" alt="The screenshot you sent that was rejected">
+                        <div id="missingRejectedScreenshot" class="missing-shot">🖼️ Screenshot preview unavailable</div>
+                        <span class="bad-mark" aria-hidden="true">✕</span>
+                    </div>
+                </section>
+                <section class="compare-card good" aria-labelledby="exampleShotLabel">
+                    <div class="compare-label" id="exampleShotLabel"><span class="compare-symbol" aria-hidden="true">✓</span> Send one screenshot containing all 3</div>
+                    <div class="example-strip">
+                        <div class="example-shot whole"><img src="./images/rejection-example.jpg" alt="Correct example showing the whole desktop"><span class="good-mark" aria-hidden="true">✓</span></div>
+                        <div class="example-shot launcher"><img src="./images/rejection-example.jpg" alt="Required Minecraft launcher area"><span class="good-mark" aria-hidden="true">✓</span></div>
+                        <div class="example-shot code"><img src="./images/rejection-example.jpg" alt="Required Microsoft code box area"><span class="good-mark" aria-hidden="true">✓</span></div>
+                    </div>
+                    <div class="visual-formula" aria-label="Show the Minecraft launcher, the Microsoft code box, and the whole screen in one screenshot">
+                        <span>🎮 Launcher</span><b>+</b><span>🔐 Code box</span><b>+</b><span>🖥️ Full screen</span>
+                    </div>
+                </section>
+            </div>
+            <div class="reject-actions">
+                <button id="tryAgainBtn" class="big-btn" type="button">📸 Try again — upload new screenshot</button>
+                <a class="reject-guide-link" href="tutorial.html">📖 Picture guide</a>
+            </div>
+        </div>
+
+        <div class="sound-control">
+            <button id="buyerSoundBtn" type="button">🔊 Test notification sound</button>
+            <span id="buyerSoundStatus">Sound turns on when you request a code.</span>
         </div>
 
         <div class="guide">
@@ -117,7 +159,7 @@
         </div>
     </div>
 
-    <script src="./js/request.js"></script>
+    <script src="./js/request.js?v=3.2"></script>
     <script>
         let cc=0,ct;
         document.getElementById('adminTrigger').addEventListener('click',()=>{
