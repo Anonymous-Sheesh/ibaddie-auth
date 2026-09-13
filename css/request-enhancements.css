@@ -1,0 +1,356 @@
+body.req-body {
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+html {
+    overflow-x: hidden;
+}
+
+body.req-body .background-anim {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    animation: none;
+    transform: none;
+}
+
+.req-card {
+    overflow: hidden;
+    transition: max-width .25s ease;
+}
+
+.code-num {
+    max-width: 100%;
+    font-size: clamp(2rem, 12vw, 52px);
+    letter-spacing: clamp(2px, 1.5vw, 8px);
+}
+
+.req-card.rejection-mode {
+    max-width: 1100px;
+}
+
+.code-success {
+    color: #74df98;
+    font-size: 1rem;
+    font-weight: 700;
+    margin-bottom: .8rem;
+}
+
+.sound-control {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin: 1rem 0 .25rem;
+    color: #9999a9;
+    font-size: .74rem;
+}
+
+.sound-control button {
+    padding: 7px 11px;
+    border: 1px solid rgba(255,255,255,.16);
+    border-radius: 9px;
+    background: rgba(255,255,255,.06);
+    color: #ddd;
+    cursor: pointer;
+    font: inherit;
+}
+
+.reject {
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+    text-align: left;
+}
+
+.reject-heading {
+    text-align: center;
+    margin-bottom: 1.25rem;
+}
+
+.reject-icon {
+    display: grid;
+    place-items: center;
+    width: 64px;
+    height: 64px;
+    margin: 0 auto .7rem;
+    border: 2px solid rgba(255,76,76,.55);
+    border-radius: 50%;
+    background: rgba(255,76,76,.14);
+    color: #ff5f5f;
+    font-size: 2rem;
+    font-weight: 900;
+}
+
+.reject .reject-title {
+    color: #fff;
+    font-size: 1.55rem;
+    line-height: 1.2;
+}
+
+.reject-subtitle {
+    color: #b8b8c5;
+    font-size: .9rem;
+    margin-top: .35rem;
+}
+
+.reject-reason-wrap {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    margin-bottom: 1.25rem;
+    padding: 1rem;
+    border: 1px solid rgba(255,76,76,.35);
+    border-radius: 14px;
+    background: rgba(255,76,76,.1);
+}
+
+.reject-reason-icon {
+    flex: 0 0 auto;
+    font-size: 1.6rem;
+    line-height: 1;
+}
+
+.reject-reason-label {
+    display: block;
+    color: #ff8888;
+    font-size: .72rem;
+    font-weight: 700;
+    letter-spacing: .08em;
+    margin-bottom: .25rem;
+}
+
+.reject .reject-reason {
+    color: #fff;
+    font-size: 1rem;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+}
+
+.compare-grid {
+    display: grid;
+    grid-template-columns: minmax(0,1fr) minmax(0,1fr);
+    gap: 18px;
+    align-items: start;
+}
+
+.compare-card {
+    border-radius: 16px;
+    padding: 14px;
+    min-width: 0;
+}
+
+.compare-card.bad {
+    background: rgba(255,76,76,.07);
+    border: 2px solid rgba(255,76,76,.55);
+}
+
+.compare-card.good {
+    background: rgba(76,175,80,.07);
+    border: 2px solid rgba(76,175,80,.55);
+}
+
+.compare-label {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin-bottom: 10px;
+    color: #fff;
+    font-size: .95rem;
+    font-weight: 700;
+}
+
+.compare-symbol {
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    color: #fff;
+    font-size: 1.05rem;
+    font-weight: 900;
+}
+
+.bad .compare-symbol,
+.bad-mark {
+    background: #e43f3f;
+}
+
+.good .compare-symbol,
+.good-mark {
+    background: #35a65a;
+}
+
+.shot-frame {
+    position: relative;
+    overflow: hidden;
+    aspect-ratio: 16/9;
+    border: 1px solid rgba(255,255,255,.12);
+    border-radius: 11px;
+    background: #08090b;
+}
+
+.shot-frame img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.bad-mark,
+.example-shot .good-mark {
+    position: absolute;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    top: 9px;
+    right: 9px;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    box-shadow: 0 5px 20px rgba(0,0,0,.55);
+    color: #fff;
+    font-size: 1.75rem;
+    font-weight: 900;
+}
+
+.missing-shot {
+    display: none;
+    height: 100%;
+    place-items: center;
+    padding: 1rem;
+    color: #ff9b9b;
+    text-align: center;
+}
+
+.example-strip {
+    display: grid;
+    grid-template-columns: repeat(3,minmax(0,1fr));
+    gap: 9px;
+}
+
+.example-shot {
+    position: relative;
+    overflow: hidden;
+    aspect-ratio: 4/3;
+    border: 1px solid rgba(76,175,80,.4);
+    border-radius: 10px;
+    background: #08090b;
+}
+
+.example-shot img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.example-shot.whole img {
+    object-fit: contain;
+}
+
+.example-shot.launcher img {
+    transform: scale(1.7);
+    transform-origin: 35% 59%;
+}
+
+.example-shot.code img {
+    transform: scale(1.9);
+    transform-origin: 72% 45%;
+}
+
+.example-shot .good-mark {
+    top: 6px;
+    right: 6px;
+    width: 30px;
+    height: 30px;
+    font-size: 1rem;
+}
+
+.visual-formula {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin: 14px 0 4px;
+    color: #fff;
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.visual-formula span {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 7px 9px;
+    border-radius: 9px;
+    background: rgba(255,255,255,.07);
+}
+
+.visual-formula b {
+    color: #4CAF50;
+    font-size: 1.2rem;
+}
+
+.reject-actions {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 10px;
+    align-items: center;
+    margin-top: 1.25rem;
+}
+
+.reject-actions .big-btn {
+    margin: 0;
+}
+
+.reject-guide-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 55px;
+    padding: 0 18px;
+    border: 1px solid rgba(255,255,255,.22);
+    border-radius: 14px;
+    color: #fff;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+@media(max-width:720px) {
+    body.req-body {
+        align-items: flex-start;
+        display: block;
+        width: 100%;
+        min-width: 0;
+    }
+
+    .req-card,
+    .req-card.rejection-mode {
+        width: calc(100% - 16px);
+        max-width: 520px;
+        margin: 8px auto;
+        padding: 1.35rem 1rem;
+    }
+
+    .compare-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .example-strip {
+        gap: 6px;
+    }
+
+    .reject-actions {
+        grid-template-columns: 1fr;
+    }
+
+    .reject .reject-title {
+        font-size: 1.35rem;
+    }
+}
