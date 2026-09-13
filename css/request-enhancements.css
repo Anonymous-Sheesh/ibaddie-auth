@@ -202,7 +202,7 @@ body.req-body .background-anim {
 }
 
 .bad-mark,
-.example-shot .good-mark {
+.shot-frame .good-mark {
     position: absolute;
     z-index: 2;
     display: grid;
@@ -227,48 +227,8 @@ body.req-body .background-anim {
     text-align: center;
 }
 
-.example-strip {
-    display: grid;
-    grid-template-columns: repeat(3,minmax(0,1fr));
-    gap: 9px;
-}
-
-.example-shot {
-    position: relative;
-    overflow: hidden;
-    aspect-ratio: 4/3;
-    border: 1px solid rgba(76,175,80,.4);
-    border-radius: 10px;
-    background: #08090b;
-}
-
-.example-shot img {
-    display: block;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-}
-
-.example-shot.whole img {
-    object-fit: contain;
-}
-
-.example-shot.launcher img {
-    transform: scale(1.7);
-    transform-origin: 35% 59%;
-}
-
-.example-shot.code img {
-    transform: scale(1.9);
-    transform-origin: 72% 45%;
-}
-
-.example-shot .good-mark {
-    top: 6px;
-    right: 6px;
-    width: 30px;
-    height: 30px;
-    font-size: 1rem;
+.correct-frame {
+    border-color: rgba(76,175,80,.45);
 }
 
 .visual-formula {
@@ -340,10 +300,6 @@ body.req-body .background-anim {
 
     .compare-grid {
         grid-template-columns: 1fr;
-    }
-
-    .example-strip {
-        gap: 6px;
     }
 
     .reject-actions {
