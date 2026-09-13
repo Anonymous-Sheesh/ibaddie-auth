@@ -116,23 +116,22 @@
                 </div>
             </div>
             <div class="compare-grid">
+                <section class="compare-card good" aria-labelledby="exampleShotLabel">
+                    <div class="compare-label" id="exampleShotLabel"><span class="compare-symbol" aria-hidden="true">✓</span> Correct screenshot</div>
+                    <div class="shot-frame correct-frame">
+                        <img id="correctScreenshot" src="./images/rejection-example.jpg" alt="Correct screenshot showing the whole desktop, Minecraft launcher, and Microsoft code box">
+                        <span class="good-mark" aria-hidden="true">✓</span>
+                    </div>
+                    <div class="visual-formula" aria-label="Show the Minecraft launcher, the Microsoft code box, and the whole screen in one screenshot">
+                        <span>🎮 Launcher</span><b>+</b><span>🔐 Code box</span><b>+</b><span>🖥️ Full screen</span>
+                    </div>
+                </section>
                 <section class="compare-card bad" aria-labelledby="yourShotLabel">
-                    <div class="compare-label" id="yourShotLabel"><span class="compare-symbol" aria-hidden="true">✕</span> Your screenshot</div>
+                    <div class="compare-label" id="yourShotLabel"><span class="compare-symbol" aria-hidden="true">✕</span> Your rejected screenshot</div>
                     <div class="shot-frame">
                         <img id="rejectedScreenshot" alt="The screenshot you sent that was rejected">
                         <div id="missingRejectedScreenshot" class="missing-shot">🖼️ Screenshot preview unavailable</div>
                         <span class="bad-mark" aria-hidden="true">✕</span>
-                    </div>
-                </section>
-                <section class="compare-card good" aria-labelledby="exampleShotLabel">
-                    <div class="compare-label" id="exampleShotLabel"><span class="compare-symbol" aria-hidden="true">✓</span> Send one screenshot containing all 3</div>
-                    <div class="example-strip">
-                        <div class="example-shot whole"><img src="./images/rejection-example.jpg" alt="Correct example showing the whole desktop"><span class="good-mark" aria-hidden="true">✓</span></div>
-                        <div class="example-shot launcher"><img src="./images/rejection-example.jpg" alt="Required Minecraft launcher area"><span class="good-mark" aria-hidden="true">✓</span></div>
-                        <div class="example-shot code"><img src="./images/rejection-example.jpg" alt="Required Microsoft code box area"><span class="good-mark" aria-hidden="true">✓</span></div>
-                    </div>
-                    <div class="visual-formula" aria-label="Show the Minecraft launcher, the Microsoft code box, and the whole screen in one screenshot">
-                        <span>🎮 Launcher</span><b>+</b><span>🔐 Code box</span><b>+</b><span>🖥️ Full screen</span>
                     </div>
                 </section>
             </div>
