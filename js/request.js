@@ -1,5 +1,5 @@
 // ══════════════════════════════════════════════════════════════════════════════
-// request.js — Buyer Code Request Logic (V3.1 — fresh code + click-to-copy)
+// request.js — Buyer Code Request Logic (V3.2 — visual rejection and success sound)
 // ══════════════════════════════════════════════════════════════════════════════
 
 const API = "https://totp-backend.ibaddie.workers.dev";
@@ -9,9 +9,12 @@ let token = null;
 let uploading = false;
 let statusTimer = null;
 let codeTimer = null;
-let presenceTimer = null;
 let pendingCountdownTimer = null;
 let currentCode = null;
+let lastSubmittedScreenshot = null;
+let buyerAudioCtx = null;
+let buyerSoundQueued = false;
+const notifiedCodes = new Set();
 
 // ─── INIT ──────────────────────────────────────────────────────────────────────
 const url = new URL(window.location.href);
@@ -23,8 +26,7 @@ if (!token) {
     $('waitText').textContent = 'No valid token. Use the link from your delivery message.';
 } else {
     $('reqBtn').disabled = false;
-    checkPresence();
-    presenceTimer = setInterval(checkPresence, 5000);
+    showAlwaysOnline();
     checkExisting();
 }
 
@@ -45,15 +47,122 @@ async function checkPresence() {
     } catch { $('badge').style.display = 'none'; }
 }
 
+function showAlwaysOnline() {
+    const badge = $('badge');
+    badge.style.display = 'inline-flex';
+    badge.className = 'badge badge-on';
+    $('badgeText').textContent = 'Ibaddie is online';
+}
+
+// ─── BUYER SUCCESS SOUND ──────────────────────────────────────────────────────
+function updateBuyerSoundStatus(message) {
+    if (!$('buyerSoundStatus')) return;
+    $('buyerSoundStatus').textContent = message ||
+        (buyerAudioCtx?.state === 'running' ? 'Sound ready ✓' : 'Tap to enable sound');
+}
+
+function prepareBuyerSound() {
+    try {
+        if (!buyerAudioCtx || buyerAudioCtx.state === 'closed') {
+            const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContextClass) return updateBuyerSoundStatus('Sound unavailable in this browser');
+            buyerAudioCtx = new AudioContextClass();
+            buyerAudioCtx.addEventListener('statechange', () => {
+                updateBuyerSoundStatus();
+                if (buyerAudioCtx.state === 'running' && buyerSoundQueued) playBuyerSuccessSound();
+            });
+        }
+        if (buyerAudioCtx.state !== 'running') {
+            Promise.resolve(buyerAudioCtx.resume()).then(() => {
+                updateBuyerSoundStatus();
+                if (buyerSoundQueued) playBuyerSuccessSound();
+            }).catch(() => updateBuyerSoundStatus('Tap Test notification sound'));
+        } else {
+            updateBuyerSoundStatus();
+            if (buyerSoundQueued) playBuyerSuccessSound();
+        }
+    } catch {
+        updateBuyerSoundStatus('Tap Test notification sound');
+    }
+}
+
+function playBuyerSuccessSound(testOnly = false) {
+    if (!buyerAudioCtx || buyerAudioCtx.state !== 'running') {
+        if (!testOnly) buyerSoundQueued = true;
+        updateBuyerSoundStatus('Code ready — tap to hear notification');
+        return false;
+    }
+    try {
+        const start = buyerAudioCtx.currentTime + 0.03;
+        [659.25, 783.99, 1046.5].forEach((frequency, index) => {
+            const oscillator = buyerAudioCtx.createOscillator();
+            const gain = buyerAudioCtx.createGain();
+            oscillator.connect(gain);
+            gain.connect(buyerAudioCtx.destination);
+            oscillator.type = 'sine';
+            oscillator.frequency.value = frequency;
+            const at = start + index * 0.16;
+            gain.gain.setValueAtTime(0.0001, at);
+            gain.gain.exponentialRampToValueAtTime(0.24, at + 0.025);
+            gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.48);
+            oscillator.addEventListener('ended', () => {
+                oscillator.disconnect();
+                gain.disconnect();
+            }, { once:true });
+            oscillator.start(at);
+            oscillator.stop(at + 0.5);
+        });
+        buyerSoundQueued = false;
+        updateBuyerSoundStatus(testOnly ? 'Test sound played ✓' : 'Code notification played ✓');
+        return true;
+    } catch {
+        if (!testOnly) buyerSoundQueued = true;
+        updateBuyerSoundStatus('Tap Test notification sound');
+        return false;
+    }
+}
+
+function notifyCodeReady(data) {
+    const notificationId = (data.requestId || 'request') + ':' + data.code;
+    if (notifiedCodes.has(notificationId)) return;
+    notifiedCodes.add(notificationId);
+    buyerSoundQueued = true;
+    prepareBuyerSound();
+}
+
+$('buyerSoundBtn').addEventListener('click', async () => {
+    const hadQueuedCode = buyerSoundQueued;
+    prepareBuyerSound();
+    try {
+        if (buyerAudioCtx?.state !== 'running') await buyerAudioCtx?.resume();
+        if (!hadQueuedCode) playBuyerSuccessSound(true);
+    } catch {
+        updateBuyerSoundStatus('Allow sound in your browser, then tap again');
+    }
+});
+
+for (const eventName of ['pointerdown', 'keydown']) {
+    document.addEventListener(eventName, () => {
+        if (token && (!buyerAudioCtx || buyerAudioCtx.state !== 'running' || buyerSoundQueued)) {
+            prepareBuyerSound();
+        }
+    }, { capture:true });
+}
+
 // ─── REQUEST BUTTON ────────────────────────────────────────────────────────────
 $('reqBtn').addEventListener('click', () => {
+    prepareBuyerSound();
     hideAll();
     $('uploadArea').style.display = 'block';
 });
 
-$('uploadArea').addEventListener('click', () => { if (!uploading) $('fileInput').click(); });
+$('uploadArea').addEventListener('click', () => {
+    prepareBuyerSound();
+    if (!uploading) $('fileInput').click();
+});
 
 $('fileInput').addEventListener('change', async e => {
+    prepareBuyerSound();
     const f = e.target.files[0];
     if (f) await upload(f);
 });
@@ -68,6 +177,7 @@ async function upload(file) {
     try {
         const compressed = await compress(file);
         if (!compressed) throw new Error('Image failed to process');
+        lastSubmittedScreenshot = compressed;
 
         const r = await fetch(`${API}/api/code-request`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -153,6 +263,7 @@ async function poll() {
             $('codeNum').style.cursor = 'pointer';
             currentCode = d.code;
             startCountdown(d.codeExpiresIn || 30);
+            notifyCodeReady(d);
         }
         else if (d.status === 'request_fresh') {
             stopPendingCountdown();
@@ -161,24 +272,8 @@ async function poll() {
         }
         else if (d.status === 'rejected') {
             stopPendingCountdown();
-            stopPolling(); hideAll();
-            $('rejectBox').style.display = 'block';
-            $('rejectReason').textContent = d.rejectionReason || 'Please follow the guide and try again.';
-            // Show a "Try Again" button below the rejection — stays until buyer clicks it
-            if (!$('tryAgainBtn')) {
-                const btn = document.createElement('button');
-                btn.id = 'tryAgainBtn';
-                btn.className = 'big-btn';
-                btn.style.marginTop = '1rem';
-                btn.textContent = '🔄 Try Again';
-                btn.onclick = () => {
-                    $('rejectBox').style.display = 'none';
-                    btn.remove();
-                    $('reqBtn').style.display = 'block';
-                    $('reqBtn').disabled = false;
-                };
-                $('rejectBox').parentNode.insertBefore(btn, $('rejectBox').nextSibling);
-            }
+            stopPolling();
+            showRejected(d);
         }
     } catch {}
 }
@@ -248,25 +343,9 @@ async function checkExisting() {
         const d = await r.json();
         if (d.status === 'pending') { hideAll(); $('reqBtn').style.display='none'; startPolling(); }
         else if (d.status === 'approved_pending') { hideAll(); $('reqBtn').style.display='none'; $('codeBox').style.display='block'; $('codeNum').textContent='······'; $('codeNum').style.color='#ff4c4c'; startPendingCountdown(d.waitSeconds||5); startPolling(); }
-        else if (d.status === 'approved' && d.code && d.codeExpiresIn > 0) { hideAll(); $('reqBtn').style.display='none'; $('codeBox').style.display='block'; $('codeNum').textContent=d.code; $('codeNum').style.color='#FFD700'; currentCode=d.code; startCountdown(d.codeExpiresIn); }
+        else if (d.status === 'approved' && d.code && d.codeExpiresIn > 0) { hideAll(); $('reqBtn').style.display='none'; $('codeBox').style.display='block'; $('codeNum').textContent=d.code; $('codeNum').style.color='#FFD700'; currentCode=d.code; startCountdown(d.codeExpiresIn); notifyCodeReady(d); }
         else if (d.status === 'rejected') {
-            hideAll(); $('reqBtn').style.display='none';
-            $('rejectBox').style.display='block';
-            $('rejectReason').textContent=d.rejectionReason||'Try again.';
-            if (!$('tryAgainBtn')) {
-                const btn = document.createElement('button');
-                btn.id = 'tryAgainBtn';
-                btn.className = 'big-btn';
-                btn.style.marginTop = '1rem';
-                btn.textContent = '🔄 Try Again';
-                btn.onclick = () => {
-                    $('rejectBox').style.display = 'none';
-                    btn.remove();
-                    $('reqBtn').style.display = 'block';
-                    $('reqBtn').disabled = false;
-                };
-                $('rejectBox').parentNode.insertBefore(btn, $('rejectBox').nextSibling);
-            }
+            showRejected(d);
         }
     } catch {}
 }
@@ -277,7 +356,31 @@ function hideAll() {
     $('waitArea').style.display = 'none';
     $('codeBox').style.display = 'none';
     $('rejectBox').style.display = 'none';
-    // Remove Try Again button if it exists
-    const tab = $('tryAgainBtn');
-    if (tab) tab.remove();
+    document.querySelector('.req-card').classList.remove('rejection-mode');
 }
+
+function showRejected(data) {
+    hideAll();
+    document.querySelector('.req-card').classList.add('rejection-mode');
+    $('rejectReason').textContent = data.rejectionReason ||
+        'The screenshot does not show the Minecraft launcher and Microsoft code box together.';
+
+    const screenshot = data.submittedScreenshot || lastSubmittedScreenshot;
+    const validImage = typeof screenshot === 'string' &&
+        /^(data:image\/(png|jpe?g|webp);base64,|https:\/\/)/i.test(screenshot);
+    $('rejectedScreenshot').style.display = validImage ? 'block' : 'none';
+    $('missingRejectedScreenshot').style.display = validImage ? 'none' : 'grid';
+    if (validImage) $('rejectedScreenshot').src = screenshot;
+    else $('rejectedScreenshot').removeAttribute('src');
+
+    $('rejectBox').style.display = 'block';
+    $('rejectBox').scrollIntoView({ behavior:'smooth', block:'start' });
+}
+
+$('tryAgainBtn').addEventListener('click', () => {
+    prepareBuyerSound();
+    hideAll();
+    $('fileInput').value = '';
+    $('uploadArea').style.display = 'block';
+    $('uploadArea').scrollIntoView({ behavior:'smooth', block:'center' });
+});
