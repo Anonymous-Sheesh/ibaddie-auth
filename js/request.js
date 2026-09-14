@@ -1,386 +1,398 @@
 // ══════════════════════════════════════════════════════════════════════════════
-// request.js — Buyer Code Request Logic (V3.2 — visual rejection and success sound)
+// IBADDIE — BUYER CODE REQUEST PAGE (request.js v5.0)
 // ══════════════════════════════════════════════════════════════════════════════
+// Flow: Request Code → upload screenshot → "checking" → admin review → code.
+// Every upload is normalized through a canvas before sending, and a tiny
+// thumbnail "fingerprint" is sent alongside it. The Worker hashes BOTH
+// server-side: if this buyer ever sent the same image before (even renamed),
+// the request is held in "checking" for 5 seconds and then auto-rejected with
+// OLD SCREENSHOT DETECTED. This page simply polls status and shows the result.
+(() => {
+    'use strict';
 
-const API = "https://totp-backend.ibaddie.workers.dev";
-const $ = id => document.getElementById(id);
+    const $ = id => document.getElementById(id);
+    const IMG_RE = /^data:image\/[a-z0-9.+-]+;base64,[a-z0-9+/=\s]+$/i;
+    const MIN_DUPLICATE_WAIT_MS = 5000; // keep the visible "checking" wait at 5s minimum
+    const POLL_MS = 2000;
 
-let token = null;
-let uploading = false;
-let statusTimer = null;
-let codeTimer = null;
-let pendingCountdownTimer = null;
-let currentCode = null;
-let lastSubmittedScreenshot = null;
-let buyerAudioCtx = null;
-let buyerSoundQueued = false;
-const notifiedCodes = new Set();
+    const state = {
+        token: null,
+        requestId: null,
+        freshMode: false,   // admin asked for a fresh screenshot → next upload goes to /fresh
+        polling: null,
+        countdown: null,
+        presenceTimer: null,
+        submitAt: 0,
+        waiting: false,
+        busy: false
+    };
 
-// ─── INIT ──────────────────────────────────────────────────────────────────────
-const url = new URL(window.location.href);
-token = url.searchParams.get('token') || url.searchParams.get('t');
-if (!token) {
-    $('reqBtn').style.display = 'none';
-    $('badge').style.display = 'none';
-    $('waitArea').style.display = 'block';
-    $('waitText').textContent = 'No valid token. Use the link from your delivery message.';
-} else {
-    $('reqBtn').disabled = false;
-    showAlwaysOnline();
-    checkExisting();
-}
-
-// ─── PRESENCE ──────────────────────────────────────────────────────────────────
-async function checkPresence() {
-    try {
-        const r = await fetch(`${API}/api/presence`);
-        const d = await r.json();
-        const b = $('badge');
-        b.style.display = 'inline-flex';
-        if (d.online) {
-            b.className = 'badge badge-on';
-            $('badgeText').textContent = 'Ibaddie is online';
-        } else {
-            b.className = 'badge badge-off';
-            $('badgeText').textContent = 'Ibaddie is offline — request will be queued';
+    // ─── SOUND (Web Audio — no files, unlocked by real clicks) ──────────────────
+    const Sound = (() => {
+        let ctx = null;
+        function ensure() {
+            try {
+                if (!ctx) {
+                    const AC = window.AudioContext || window.webkitAudioContext;
+                    if (!AC) return null;
+                    ctx = new AC();
+                }
+                if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+                return ctx;
+            } catch (e) { return null; }
         }
-    } catch { $('badge').style.display = 'none'; }
-}
+        function tone(freq, at, dur, type, vol) {
+            const o = ctx.createOscillator(), g = ctx.createGain();
+            o.type = type || 'sine';
+            o.frequency.value = freq;
+            g.gain.setValueAtTime(0.0001, at);
+            g.gain.exponentialRampToValueAtTime(vol || 0.16, at + 0.02);
+            g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+            o.connect(g); g.connect(ctx.destination);
+            o.start(at); o.stop(at + dur + 0.05);
+        }
+        function chime() {
+            const c = ensure(); if (!c || c.state !== 'running') return false;
+            const t = c.currentTime + 0.02;
+            tone(880, t, 0.18); tone(1174.66, t + 0.13, 0.20); tone(1567.98, t + 0.27, 0.35);
+            return true;
+        }
+        function buzz() {
+            const c = ensure(); if (!c || c.state !== 'running') return false;
+            const t = c.currentTime + 0.02;
+            tone(196, t, 0.28, 'square', 0.07); tone(147, t + 0.22, 0.40, 'square', 0.07);
+            return true;
+        }
+        function unlock() {
+            const c = ensure(); if (!c) return false;
+            try {
+                const b = c.createBuffer(1, 1, 22050);
+                const s = c.createBufferSource(); s.buffer = b; s.connect(c.destination); s.start(0);
+            } catch (e) {}
+            if (c.state === 'suspended') c.resume().catch(() => {});
+            return true;
+        }
+        return { chime, buzz, unlock };
+    })();
 
-function showAlwaysOnline() {
-    const badge = $('badge');
-    badge.style.display = 'inline-flex';
-    badge.className = 'badge badge-on';
-    $('badgeText').textContent = 'Ibaddie is online';
-}
+    // ─── UI HELPERS ──────────────────────────────────────────────────────────────
+    const showBox = el => { if (el) el.style.display = 'block'; };
+    const showEl  = el => { if (el) el.style.display = ''; };
+    const hide    = el => { if (el) el.style.display = 'none'; };
 
-// ─── BUYER SUCCESS SOUND ──────────────────────────────────────────────────────
-function updateBuyerSoundStatus(message) {
-    if (!$('buyerSoundStatus')) return;
-    $('buyerSoundStatus').textContent = message ||
-        (buyerAudioCtx?.state === 'running' ? 'Sound ready ✓' : 'Tap to enable sound');
-}
+    function resetUI() {
+        state.requestId = null;
+        state.freshMode = false;
+        state.waiting = false;
+        state.busy = false;
+        if (state.polling) { clearInterval(state.polling); state.polling = null; }
+        if (state.countdown) { clearInterval(state.countdown); state.countdown = null; }
+        hide($('uploadArea')); hide($('waitArea')); hide($('codeBox')); hide($('rejectBox'));
+        const rb = $('reqBtn');
+        rb.disabled = !state.token;
+        if (state.token) rb.textContent = '📸 Request Code';
+        showEl(rb);
+        $('fileInput').value = '';
+    }
 
-function prepareBuyerSound() {
-    try {
-        if (!buyerAudioCtx || buyerAudioCtx.state === 'closed') {
-            const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-            if (!AudioContextClass) return updateBuyerSoundStatus('Sound unavailable in this browser');
-            buyerAudioCtx = new AudioContextClass();
-            buyerAudioCtx.addEventListener('statechange', () => {
-                updateBuyerSoundStatus();
-                if (buyerAudioCtx.state === 'running' && buyerSoundQueued) playBuyerSuccessSound();
+    function startWait(text) {
+        state.waiting = true;
+        hide($('uploadArea')); hide($('codeBox')); hide($('rejectBox'));
+        $('waitText').textContent = text || 'Waiting for Ibaddie to review...';
+        showBox($('waitArea'));
+    }
+
+    function showReject(reason, shot) {
+        state.waiting = false;
+        if (state.polling) { clearInterval(state.polling); state.polling = null; }
+        hide($('waitArea')); hide($('uploadArea')); hide($('codeBox'));
+        $('rejectReason').textContent = reason || 'Screenshot rejected.';
+        const img = $('rejectedScreenshot'), missing = $('missingRejectedScreenshot');
+        if (shot && IMG_RE.test(shot)) {
+            img.src = shot;
+            img.style.display = '';
+            missing.style.display = 'none';
+        } else {
+            img.removeAttribute('src');
+            img.style.display = 'none';
+            missing.style.display = 'block';
+        }
+        showBox($('rejectBox'));
+        Sound.buzz();
+    }
+
+    function showCode(code, secs) {
+        state.waiting = false;
+        if (state.polling) { clearInterval(state.polling); state.polling = null; }
+        hide($('waitArea')); hide($('uploadArea')); hide($('rejectBox'));
+        $('codeNum').textContent = code;
+        showBox($('codeBox'));
+        Sound.chime();
+        let left = Math.max(1, secs || 30);
+        const render = () => { $('codeTimer').textContent = left > 0 ? 'Expires in ' + left + 's' : 'Expired — request again'; };
+        render();
+        if (state.countdown) clearInterval(state.countdown);
+        state.countdown = setInterval(() => {
+            left--;
+            if (left <= 0) { clearInterval(state.countdown); state.countdown = null; resetUI(); return; }
+            render();
+        }, 1000);
+    }
+
+    // ─── PRESENCE ────────────────────────────────────────────────────────────────
+    async function refreshPresence() {
+        try {
+            const r = await fetch('/api/presence', { cache: 'no-store' });
+            const d = await r.json();
+            const badge = $('badge'), txt = $('badgeText');
+            if (d && d.online) { badge.className = 'badge badge-on'; txt.textContent = 'Ibaddie is online'; }
+            else { badge.className = 'badge badge-off'; txt.textContent = 'Ibaddie is offline'; }
+            badge.style.display = 'inline-flex';
+        } catch (e) {}
+    }
+
+    // ─── IMAGE NORMALIZATION (browser-side, deterministic) ──────────────────────
+    // The SAME pixels always produce the SAME strings in the same browser, so
+    // renamed or metadata-resaved copies collapse to identical fingerprints.
+    async function loadBitmap(file) {
+        if (window.createImageBitmap) {
+            try { return await createImageBitmap(file); } catch (e) {}
+        }
+        const url = URL.createObjectURL(file);
+        try {
+            return await new Promise((res, rej) => {
+                const i = new Image();
+                i.onload = () => res(i);
+                i.onerror = () => rej(new Error('Could not read that image.'));
+                i.src = url;
             });
+        } finally {
+            setTimeout(() => URL.revokeObjectURL(url), 5000);
         }
-        if (buyerAudioCtx.state !== 'running') {
-            Promise.resolve(buyerAudioCtx.resume()).then(() => {
-                updateBuyerSoundStatus();
-                if (buyerSoundQueued) playBuyerSuccessSound();
-            }).catch(() => updateBuyerSoundStatus('Tap Test notification sound'));
-        } else {
-            updateBuyerSoundStatus();
-            if (buyerSoundQueued) playBuyerSuccessSound();
+    }
+
+    async function processFile(file) {
+        if (!file || !file.type || !file.type.startsWith('image/')) throw new Error('Please upload an image file (PNG or JPG screenshot).');
+        if (file.size > 20 * 1024 * 1024) throw new Error('That image is too large (max 20 MB).');
+        const bmp = await loadBitmap(file);
+        const w0 = bmp.width || bmp.naturalWidth, h0 = bmp.height || bmp.naturalHeight;
+        if (!w0 || !h0) throw new Error('Could not read that image.');
+        const MAX = 1600;
+        const scale = Math.min(1, MAX / Math.max(w0, h0));
+        const w = Math.max(1, Math.round(w0 * scale)), h = Math.max(1, Math.round(h0 * scale));
+        const c = document.createElement('canvas'); c.width = w; c.height = h;
+        c.getContext('2d').drawImage(bmp, 0, 0, w, h);
+        const screenshot = c.toDataURL('image/jpeg', 0.85);
+        const fw = 256, fh = Math.max(1, Math.round((h / w) * 256) || 1);
+        const c2 = document.createElement('canvas'); c2.width = fw; c2.height = fh;
+        c2.getContext('2d').drawImage(bmp, 0, 0, fw, fh);
+        const fingerprint = c2.toDataURL('image/jpeg', 0.7);
+        if (bmp.close) bmp.close();
+        return { screenshot, fingerprint };
+    }
+
+    // ─── SUBMIT + POLL ───────────────────────────────────────────────────────────
+    async function submitShot(payload) {
+        if (state.busy) return;
+        state.busy = true;
+        startWait(state.freshMode ? 'Uploading your new screenshot...' : 'Verifying your screenshot...');
+        state.submitAt = Date.now();
+        try {
+            const endpoint = state.freshMode ? '/api/code-request/fresh' : '/api/code-request';
+            const r = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(Object.assign({ token: state.token }, payload))
+            });
+            let d = {};
+            try { d = await r.json(); } catch (e) {}
+            if (!r.ok) throw new Error(d.error || 'Upload failed — check your connection and try again.');
+            if (d.requestId) state.requestId = d.requestId;
+            if (state.freshMode) { state.freshMode = false; startWait('Waiting for Ibaddie to review...'); }
+            startPolling();
+        } catch (e) {
+            state.waiting = true;
+            $('waitText').textContent = (e.message || 'Something went wrong.') + ' — press Cancel to go back.';
+        } finally {
+            state.busy = false;
         }
-    } catch {
-        updateBuyerSoundStatus('Tap Test notification sound');
     }
-}
 
-function playBuyerSuccessSound(testOnly = false) {
-    if (!buyerAudioCtx || buyerAudioCtx.state !== 'running') {
-        if (!testOnly) buyerSoundQueued = true;
-        updateBuyerSoundStatus('Code ready — tap to hear notification');
-        return false;
+    function startPolling() {
+        if (state.polling) clearInterval(state.polling);
+        state.polling = setInterval(pollOnce, POLL_MS);
+        pollOnce();
     }
-    try {
-        const start = buyerAudioCtx.currentTime + 0.03;
-        [659.25, 783.99, 1046.5].forEach((frequency, index) => {
-            const oscillator = buyerAudioCtx.createOscillator();
-            const gain = buyerAudioCtx.createGain();
-            oscillator.connect(gain);
-            gain.connect(buyerAudioCtx.destination);
-            oscillator.type = 'sine';
-            oscillator.frequency.value = frequency;
-            const at = start + index * 0.16;
-            gain.gain.setValueAtTime(0.0001, at);
-            gain.gain.exponentialRampToValueAtTime(0.24, at + 0.025);
-            gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.48);
-            oscillator.addEventListener('ended', () => {
-                oscillator.disconnect();
-                gain.disconnect();
-            }, { once:true });
-            oscillator.start(at);
-            oscillator.stop(at + 0.5);
-        });
-        buyerSoundQueued = false;
-        updateBuyerSoundStatus(testOnly ? 'Test sound played ✓' : 'Code notification played ✓');
-        return true;
-    } catch {
-        if (!testOnly) buyerSoundQueued = true;
-        updateBuyerSoundStatus('Tap Test notification sound');
-        return false;
-    }
-}
 
-function notifyCodeReady(data) {
-    const notificationId = (data.requestId || 'request') + ':' + data.code;
-    if (notifiedCodes.has(notificationId)) return;
-    notifiedCodes.add(notificationId);
-    buyerSoundQueued = true;
-    prepareBuyerSound();
-}
-
-$('buyerSoundBtn').addEventListener('click', async () => {
-    const hadQueuedCode = buyerSoundQueued;
-    prepareBuyerSound();
-    try {
-        if (buyerAudioCtx?.state !== 'running') await buyerAudioCtx?.resume();
-        if (!hadQueuedCode) playBuyerSuccessSound(true);
-    } catch {
-        updateBuyerSoundStatus('Allow sound in your browser, then tap again');
-    }
-});
-
-for (const eventName of ['pointerdown', 'keydown']) {
-    document.addEventListener(eventName, () => {
-        if (token && (!buyerAudioCtx || buyerAudioCtx.state !== 'running' || buyerSoundQueued)) {
-            prepareBuyerSound();
+    async function pollOnce() {
+        if (!state.token) return;
+        let d;
+        try {
+            const r = await fetch('/api/code-request/status?token=' + encodeURIComponent(state.token), { cache: 'no-store' });
+            d = await r.json();
+        } catch (e) {
+            $('waitText').textContent = 'Reconnecting...';
+            return;
         }
-    }, { capture:true });
-}
+        handleStatus(d);
+    }
 
-// ─── REQUEST BUTTON ────────────────────────────────────────────────────────────
-$('reqBtn').addEventListener('click', () => {
-    prepareBuyerSound();
-    hideAll();
-    $('uploadArea').style.display = 'block';
-});
-
-$('uploadArea').addEventListener('click', () => {
-    prepareBuyerSound();
-    if (!uploading) $('fileInput').click();
-});
-
-$('fileInput').addEventListener('change', async e => {
-    prepareBuyerSound();
-    const f = e.target.files[0];
-    if (f) await upload(f);
-});
-
-async function upload(file) {
-    if (uploading || !token) return;
-    uploading = true;
-    $('uploadArea').style.display = 'none';
-    $('waitArea').style.display = 'block';
-    $('waitText').textContent = 'Uploading screenshot...';
-
-    try {
-        const compressed = await compress(file);
-        if (!compressed) throw new Error('Image failed to process');
-        lastSubmittedScreenshot = compressed;
-
-        const r = await fetch(`${API}/api/code-request`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token, screenshot: compressed })
-        });
-        const d = await r.json();
-        if (!r.ok) throw new Error(d.error || 'Failed');
-        $('waitText').textContent = 'Waiting for Ibaddie to review...';
-        startPolling();
-    } catch (e) {
-        $('waitArea').style.display = 'none';
-        $('reqBtn').style.display = 'block';
-        $('reqBtn').disabled = false;
-        alert('Error: ' + e.message);
-    } finally { uploading = false; }
-}
-
-// ─── IMAGE COMPRESS ────────────────────────────────────────────────────────────
-function compress(file) {
-    return new Promise(res => {
-        const r = new FileReader();
-        r.onload = e => {
-            const img = new Image();
-            img.onload = () => {
-                const c = document.createElement('canvas');
-                const s = Math.min(1, 800 / img.width);
-                c.width = img.width * s; c.height = img.height * s;
-                c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-                res(c.toDataURL('image/jpeg', 0.7));
-            };
-            img.onerror = () => res(null);
-            img.src = e.target.result;
-        };
-        r.onerror = () => res(null);
-        r.readAsDataURL(file);
-    });
-}
-
-// ─── STATUS POLLING (2s) ───────────────────────────────────────────────────────
-function startPolling() { stopPolling(); poll(); statusTimer = setInterval(poll, 2000); }
-function stopPolling() { if (statusTimer) { clearInterval(statusTimer); statusTimer = null; } }
-
-async function poll() {
-    if (!token) return;
-    try {
-        const r = await fetch(`${API}/api/code-request/status?token=${token}`);
-        const d = await r.json();
-
-        if (d.status === 'none' || d.status === 'expired') {
-            stopPolling(); stopPendingCountdown(); hideAll();
-            $('reqBtn').style.display = 'block'; $('reqBtn').disabled = false;
-            if (d.status === 'expired') {
-                $('waitArea').style.display='block';
-                $('waitText').textContent='Code expired. Request a new one.';
-                setTimeout(()=>{$('waitArea').style.display='none';},2000);
+    function handleStatus(d) {
+        if (!d || !d.status) return;
+        switch (d.status) {
+            case 'checking':
+                $('waitText').textContent = 'Verifying your screenshot...';
+                break;
+            case 'pending':
+                $('waitText').textContent = 'Waiting for Ibaddie to review...';
+                break;
+            case 'request_fresh':
+                if (!state.freshMode) {
+                    state.freshMode = true;
+                    state.waiting = false;
+                    if (state.polling) { clearInterval(state.polling); state.polling = null; }
+                    $('waitText').textContent = 'Ibaddie asked for a NEW screenshot — pick a fresh one below.';
+                    showBox($('waitArea'));
+                    showBox($('uploadArea'));
+                    Sound.buzz();
+                }
+                break;
+            case 'approved_pending':
+                $('waitText').textContent = 'Ibaddie approved — your code unlocks in ' + (d.waitSeconds || 1) + 's...';
+                break;
+            case 'approved':
+                if (d.code) showCode(d.code, d.codeExpiresIn || 30);
+                break;
+            case 'expired':
+                resetUI();
+                break;
+            case 'rejected': {
+                const reason = d.rejectionReason || 'Screenshot rejected.';
+                // The Worker already holds duplicates for 5s; keep the visible wait
+                // at 5s minimum even if clocks drift slightly.
+                const remain = MIN_DUPLICATE_WAIT_MS - (Date.now() - state.submitAt);
+                if (remain > 0 && /OLD SCREENSHOT/i.test(reason)) {
+                    $('waitText').textContent = 'Verifying your screenshot...';
+                    setTimeout(() => showReject(reason, d.submittedScreenshot), remain);
+                } else {
+                    showReject(reason, d.submittedScreenshot);
+                }
+                break;
             }
-            return;
+            case 'none':
+                if (state.waiting || state.freshMode) resetUI();
+                break;
         }
-        if (d.status === 'pending') {
-            stopPendingCountdown();
-            hideAll(); $('waitArea').style.display='block';
-            $('waitText').textContent='Waiting for Ibaddie to review...';
+    }
+
+    async function withdraw() {
+        if (!state.token) return;
+        try {
+            await fetch('/api/code-request/withdraw', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token: state.token })
+            });
+        } catch (e) {}
+    }
+    window.cancelRequest = async () => { await withdraw(); resetUI(); };
+
+    // ─── RESUME AFTER RELOAD ─────────────────────────────────────────────────────
+    async function resumeIfNeeded() {
+        if (!state.token) return;
+        try {
+            const r = await fetch('/api/code-request/status?token=' + encodeURIComponent(state.token), { cache: 'no-store' });
+            const d = await r.json();
+            if (!d || !d.status || d.status === 'none' || d.status === 'rejected' || d.status === 'expired') return;
+            if (d.status === 'approved') { if (d.code) showCode(d.code, d.codeExpiresIn || 30); return; }
+            if (d.status === 'request_fresh') { handleStatus(d); return; }
+            state.requestId = d.requestId || null;
+            state.submitAt = Date.now() - 10000; // old request — never re-gate the 5s window
+            startWait(d.status === 'checking' ? 'Verifying your screenshot...' : 'Waiting for Ibaddie to review...');
+            startPolling();
+        } catch (e) {}
+    }
+
+    // ─── TOKEN + INIT ────────────────────────────────────────────────────────────
+    function extractToken() {
+        const q = new URLSearchParams(location.search);
+        let t = q.get('t') || q.get('token') || q.get('tid');
+        if (!t && location.hash) {
+            const h = new URLSearchParams(location.hash.replace(/^#/, ''));
+            t = h.get('t') || h.get('token');
         }
-        else if (d.status === 'approved_pending') {
-            // Admin approved but code needs to wait for fresh window
-            // Show "Showing code in X..." countdown
-            hideAll();
-            $('codeBox').style.display = 'block';
-            $('codeNum').textContent = '······';
-            $('codeNum').style.color = '#ff4c4c';
-            $('codeNum').style.cursor = 'default';
-            currentCode = null;
-            const waitSecs = d.waitSeconds || 5;
-            $('codeTimer').textContent = `Showing code in ${waitSecs}s...`;
-            startPendingCountdown(waitSecs);
+        if (t) { try { sessionStorage.setItem('ib_token', t); } catch (e) {} return t; }
+        try { t = sessionStorage.getItem('ib_token'); } catch (e) {}
+        return t || null;
+    }
+
+    function init() {
+        state.token = extractToken();
+        const reqBtn = $('reqBtn'), upload = $('uploadArea'), input = $('fileInput');
+
+        if (!state.token) {
+            reqBtn.disabled = true;
+            reqBtn.textContent = '🔗 Invalid link — ask Ibaddie for yours';
         }
-        else if (d.status === 'approved' && d.code) {
-            stopPendingCountdown();
-            hideAll();
-            $('codeBox').style.display = 'block';
-            $('codeNum').textContent = d.code;
-            $('codeNum').style.color = '#FFD700';
-            $('codeNum').style.cursor = 'pointer';
-            currentCode = d.code;
-            startCountdown(d.codeExpiresIn || 30);
-            notifyCodeReady(d);
-        }
-        else if (d.status === 'request_fresh') {
-            stopPendingCountdown();
-            stopPolling(); hideAll();
-            $('uploadArea').style.display='block'; $('fileInput').value='';
-        }
-        else if (d.status === 'rejected') {
-            stopPendingCountdown();
-            stopPolling();
-            showRejected(d);
-        }
-    } catch {}
-}
 
-// ─── PENDING COUNTDOWN (for approved_pending "Showing code in X...") ────────────
-function startPendingCountdown(secs) {
-    stopPendingCountdown();
-    let left = secs;
-    $('codeTimer').textContent = `Showing code in ${left}s...`;
-    pendingCountdownTimer = setInterval(() => {
-        left--;
-        if (left <= 0) {
-            stopPendingCountdown();
-            // Force immediate poll to get the fresh code
-            poll();
-            return;
-        }
-        $('codeTimer').textContent = `Showing code in ${left}s...`;
-    }, 1000);
-}
-function stopPendingCountdown() { if (pendingCountdownTimer) { clearInterval(pendingCountdownTimer); pendingCountdownTimer = null; } }
+        reqBtn.addEventListener('click', () => {
+            if (!state.token) return;
+            Sound.unlock(); // inside a real click → browser allows audio later
+            hide(reqBtn);
+            showBox(upload);
+        });
 
-// ─── CODE COUNTDOWN ────────────────────────────────────────────────────────────
-function startCountdown(s) {
-    if (codeTimer) clearInterval(codeTimer);
-    let left = s;
-    $('codeTimer').textContent = `Expires in ${left}s`;
-    codeTimer = setInterval(() => {
-        if (--left <= 0) {
-            clearInterval(codeTimer);
-            $('codeBox').style.display = 'none';
-            $('codeNum').textContent = '000000';
-            currentCode = null;
-            $('waitArea').style.display = 'block';
-            $('waitText').textContent = 'Code expired. Request a new one.';
-            $('reqBtn').style.display = 'block'; $('reqBtn').disabled = false;
-            return;
-        }
-        $('codeTimer').textContent = `Expires in ${left}s`;
-    }, 1000);
-}
+        upload.addEventListener('click', () => { if (!state.busy) input.click(); });
 
-// ─── CLICK TO COPY ─────────────────────────────────────────────────────────────
-$('codeNum').addEventListener('click', () => {
-    if (!currentCode) return;
-    navigator.clipboard.writeText(currentCode).then(() => {
-        const orig = $('codeNum').style.color;
-        $('codeNum').style.color = '#4CAF50';
-        setTimeout(() => { $('codeNum').style.color = orig; }, 500);
-    }).catch(() => {});
-});
+        input.addEventListener('change', async () => {
+            const file = input.files && input.files[0];
+            if (!file) return;
+            try {
+                const payload = await processFile(file);
+                await submitShot(payload);
+            } catch (e) {
+                input.value = '';
+                startWait((e.message || 'Upload failed.') + ' — press Cancel to go back.');
+            }
+        });
 
-// ─── CANCEL ────────────────────────────────────────────────────────────────────
-async function cancelRequest() {
-    if (!token) return;
-    try { await fetch(`${API}/api/code-request/withdraw`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({token}) }); } catch {}
-    stopPolling(); stopPendingCountdown(); hideAll();
-    $('reqBtn').style.display = 'block'; $('reqBtn').disabled = false;
-}
-window.cancelRequest = cancelRequest;
+        $('tryAgainBtn').addEventListener('click', () => {
+            withdraw(); // fire & forget — must not delay the file picker gesture
+            resetUI();
+            hide(reqBtn);
+            showBox(upload);
+            input.click();
+        });
 
-// ─── CHECK EXISTING ON LOAD ────────────────────────────────────────────────────
-async function checkExisting() {
-    if (!token) return;
-    try {
-        const r = await fetch(`${API}/api/code-request/status?token=${token}`);
-        const d = await r.json();
-        if (d.status === 'pending') { hideAll(); $('reqBtn').style.display='none'; startPolling(); }
-        else if (d.status === 'approved_pending') { hideAll(); $('reqBtn').style.display='none'; $('codeBox').style.display='block'; $('codeNum').textContent='······'; $('codeNum').style.color='#ff4c4c'; startPendingCountdown(d.waitSeconds||5); startPolling(); }
-        else if (d.status === 'approved' && d.code && d.codeExpiresIn > 0) { hideAll(); $('reqBtn').style.display='none'; $('codeBox').style.display='block'; $('codeNum').textContent=d.code; $('codeNum').style.color='#FFD700'; currentCode=d.code; startCountdown(d.codeExpiresIn); notifyCodeReady(d); }
-        else if (d.status === 'rejected') {
-            showRejected(d);
-        }
-    } catch {}
-}
+        $('codeNum').addEventListener('click', () => {
+            const code = $('codeNum').textContent.trim();
+            if (!/^\d{6}$/.test(code)) return;
+            const hint = $('codeHint');
+            const old = hint.textContent;
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(code).then(() => {
+                    hint.textContent = '✅ Copied! Paste it into the launcher NOW.';
+                    setTimeout(() => { hint.textContent = old; }, 2500);
+                }).catch(() => {});
+            }
+        });
 
-function hideAll() {
-    $('reqBtn').style.display = 'none';
-    $('uploadArea').style.display = 'none';
-    $('waitArea').style.display = 'none';
-    $('codeBox').style.display = 'none';
-    $('rejectBox').style.display = 'none';
-    document.querySelector('.req-card').classList.remove('rejection-mode');
-}
+        $('buyerSoundBtn').addEventListener('click', () => {
+            Sound.unlock();
+            try { localStorage.setItem('ib_buyer_sound', '1'); } catch (e) {}
+            setTimeout(() => {
+                const ok = Sound.chime();
+                $('buyerSoundStatus').textContent = ok
+                    ? 'Sound is ON — you will hear this when your code arrives.'
+                    : 'Your browser blocked audio — tap the button once more, or raise the volume.';
+            }, 80);
+        });
 
-function showRejected(data) {
-    hideAll();
-    document.querySelector('.req-card').classList.add('rejection-mode');
-    $('rejectReason').textContent = data.rejectionReason ||
-        'The screenshot does not show the Minecraft launcher and Microsoft code box together.';
+        refreshPresence();
+        state.presenceTimer = setInterval(refreshPresence, 10000);
+        resetUI();
+        resumeIfNeeded();
+    }
 
-    const screenshot = data.submittedScreenshot || lastSubmittedScreenshot;
-    const validImage = typeof screenshot === 'string' &&
-        /^(data:image\/(png|jpe?g|webp);base64,|https:\/\/)/i.test(screenshot);
-    $('rejectedScreenshot').style.display = validImage ? 'block' : 'none';
-    $('missingRejectedScreenshot').style.display = validImage ? 'none' : 'grid';
-    if (validImage) $('rejectedScreenshot').src = screenshot;
-    else $('rejectedScreenshot').removeAttribute('src');
-
-    $('rejectBox').style.display = 'block';
-    $('rejectBox').scrollIntoView({ behavior:'smooth', block:'start' });
-}
-
-$('tryAgainBtn').addEventListener('click', () => {
-    prepareBuyerSound();
-    hideAll();
-    $('fileInput').value = '';
-    $('uploadArea').style.display = 'block';
-    $('uploadArea').scrollIntoView({ behavior:'smooth', block:'center' });
-});
+    init();
+})();
