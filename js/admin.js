@@ -1,6 +1,10 @@
 // ══════════════════════════════════════════════════════════════════════════════
-// IBADDIE — ADMIN PANEL (admin.js v5.0)
+// IBADDIE — ADMIN PANEL (admin.js v5.2)
 // ══════════════════════════════════════════════════════════════════════════════
+// v5.1 HOTFIX — "Could not reach the server":
+// This page is hosted on GitHub Pages, but the backend lives on a Cloudflare
+// Worker. v5.0 called relative "/api/..." paths, which hit github.io itself
+// (404). Every API call now goes to the Worker's own address (WORKER_URL).
 // NOTIFICATION SOUND — THE FIX:
 // Browsers block audio until the user has interacted with the page. The old
 // version could never play because its audio context was created/suspended
@@ -16,6 +20,24 @@
     const $ = id => document.getElementById(id);
     const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const IMG_RE = /^data:image\/[a-z0-9.+-]+;base64,[a-z0-9+/=\s]+$/i;
+
+    // ─── WORKER API BASE (v5.1 hotfix) ─────────────────────────────────────────
+    // admin.html is served by GitHub Pages, so relative "/api/..." calls would
+    // hit github.io (404). They must go to the Worker's own address instead.
+    // You can override it any time with:  admin.html?worker=https://<worker>/
+    // (the override is remembered in this browser until you clear it).
+    const DEFAULT_WORKER_URL = 'https://totp-backend.ibaddie.workers.dev';
+    const WORKER_URL = (() => {
+        const clean = u => String(u || '').trim().replace(/\/+$/, '');
+        try {
+            const q = new URLSearchParams(location.search);
+            const fromUrl = clean(q.get('worker') || q.get('api'));
+            if (fromUrl) { localStorage.setItem('ib_worker_url', fromUrl); return fromUrl; }
+            const saved = clean(localStorage.getItem('ib_worker_url'));
+            if (saved) return saved;
+        } catch (e) {}
+        return clean(DEFAULT_WORKER_URL);
+    })();
 
     let pw = '';
     let rows = [];
@@ -91,7 +113,7 @@
         o.headers = Object.assign({ Authorization: pw, 'Content-Type': 'application/json' }, opts.headers || {});
         if (o.body && typeof o.body !== 'string') o.body = JSON.stringify(o.body);
         o.cache = 'no-store';
-        const r = await fetch(path, o);
+        const r = await fetch(WORKER_URL + path, o);
         if (r.status === 401) { forceLogout('Session ended — please sign in again.'); throw new Error('unauthorized'); }
         let d = null;
         try { d = await r.json(); } catch (e) {}
@@ -148,21 +170,38 @@
         $('err').textContent = '';
         if (!val) { $('err').textContent = 'Enter the admin password.'; return; }
         try {
-            const r = await fetch('/api/admin/pending', { headers: { Authorization: val }, cache: 'no-store' });
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 10000);
+            let r;
+            try {
+                r = await fetch(WORKER_URL + '/api/admin/login', {
+                    method: 'GET',
+                    headers: { Authorization: val, Accept: 'application/json' },
+                    cache: 'no-store',
+                    signal: controller.signal
+                });
+            } finally {
+                clearTimeout(timeout);
+            }
             if (r.status === 401) { $('err').textContent = 'Wrong password.'; return; }
-            if (!r.ok) { $('err').textContent = 'Could not reach the server. Try again.'; return; }
+            if (!r.ok) {
+                let detail = '';
+                try { const body = await r.json(); detail = body && body.error ? ': ' + body.error : ''; } catch (e) {}
+                $('err').textContent = 'Server error (' + r.status + ')' + detail + '. Try again.';
+                return;
+            }
             pw = val;
             try { sessionStorage.setItem('ib_pw', pw); } catch (e) {}
             enterDash();
         } catch (e) {
-            $('err').textContent = 'Could not reach the server. Try again.';
+            $('err').textContent = 'Could not reach the Worker at ' + (WORKER_URL || 'the server') + '. Check your internet, then try again.';
         }
     };
 
     function forceLogout(text) {
         const cached = pw;
         try {
-            if (cached) fetch('/api/admin/go-offline', {
+            if (cached) fetch(WORKER_URL + '/api/admin/go-offline', {
                 method: 'POST',
                 headers: { Authorization: cached, 'Content-Type': 'application/json' },
                 body: '{}', keepalive: true
@@ -305,7 +344,7 @@
     window.fetchList = fetchList;
 
     function buyerLink(name) {
-        return location.origin + '/request.html?t=' + encodeURIComponent(name);
+        return new URL('request.html?t=' + encodeURIComponent(name), location.href).href;
     }
 
     function filteredRows() {
@@ -508,7 +547,7 @@
 
         if (pw) {
             // Silent re-validation of the stored password after a page reload
-            fetch('/api/admin/pending', { headers: { Authorization: pw }, cache: 'no-store' })
+            fetch(WORKER_URL + '/api/admin/pending', { headers: { Authorization: pw }, cache: 'no-store' })
                 .then(r => {
                     if (r.ok) enterDash();
                     else { try { sessionStorage.removeItem('ib_pw'); } catch (e) {} pw = ''; }
