@@ -32,6 +32,7 @@
         submitAt: 0,
         waiting: false,
         busy: false,
+        approved: false,
         processing: false,
         pollBusy: false,
         generation: 0,
@@ -96,7 +97,15 @@
     const showEl  = el => { if (el) el.style.display = ''; };
     const hide    = el => { if (el) el.style.display = 'none'; };
 
+    function setApproved(approved) {
+        state.approved = approved;
+        const cancel = document.querySelector('#waitArea .cancel-btn');
+        cancel.style.display = approved ? 'none' : '';
+        cancel.disabled = approved;
+    }
+
     function resetUI() {
+        setApproved(false);
         state.generation++;
         document.querySelector('.req-card').classList.remove('rejection-mode');
         state.requestId = null;
@@ -144,6 +153,7 @@
 
     function showCode(code, secs) {
         if (secs <= 0) { resetUI(); return; }
+        setApproved(true);
         hide($('reqBtn'));
         state.waiting = false;
         if (state.polling) { clearInterval(state.polling); state.polling = null; }
@@ -279,9 +289,11 @@
                 }
                 break;
             case 'approved_pending':
+                setApproved(true);
                 $('waitText').textContent = 'Ibaddie approved — your code unlocks in ' + (d.waitSeconds || 1) + 's...';
                 break;
             case 'approved':
+                setApproved(true);
                 if (d.code) showCode(d.code, d.codeExpiresIn ?? 0);
                 break;
             case 'expired':
@@ -310,7 +322,7 @@
             });
         } catch (e) {}
     }
-    window.cancelRequest = async () => { if (state.busy || state.processing) return; state.generation++; await withdraw(); resetUI(); };
+    window.cancelRequest = async () => { if (state.approved || state.busy || state.processing) return; state.generation++; await withdraw(); resetUI(); };
 
     // ─── RESUME AFTER RELOAD ─────────────────────────────────────────────────────
     async function resumeIfNeeded() {
@@ -325,6 +337,7 @@
             state.requestId = d.requestId || null;
             state.submitAt = Date.now() - 10000; // old request — never re-gate the 5s window
             startWait(d.status === 'checking' ? 'Verifying your screenshot...' : 'Waiting for Ibaddie to review...');
+            handleStatus(d);
             startPolling();
         } catch (e) {}
     }
