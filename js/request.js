@@ -1,13 +1,13 @@
 // ══════════════════════════════════════════════════════════════════════════════
-// IBADDIE — BUYER CODE REQUEST PAGE (request.js v5.2)
+// IBADDIE — BUYER CODE REQUEST PAGE (request.js v6.0)
 // ══════════════════════════════════════════════════════════════════════════════
 // v5.1 HOTFIX: this page is hosted on GitHub Pages but the backend is a
 // Cloudflare Worker — all API calls now go to the Worker's own address
 // (WORKER_URL) instead of relative "/api/..." paths that hit github.io (404).
 // Flow: Request Code → upload screenshot → "checking" → admin review → code.
-// Every upload is normalized through a canvas before sending, and a tiny
-// thumbnail "fingerprint" is sent alongside it. The Worker hashes BOTH
-// server-side: if this buyer ever sent the same image before (even renamed),
+// Every upload is normalized through a canvas before sending.
+// The Worker hashes the received image bytes, independent of its filename.
+// If this token sent the same image before (even renamed),
 // the request is held in "checking" for 5 seconds and then auto-rejected with
 // OLD SCREENSHOT DETECTED. This page simply polls status and shows the result.
 (() => {
@@ -15,25 +15,12 @@
 
     const $ = id => document.getElementById(id);
     const IMG_RE = /^data:image\/[a-z0-9.+-]+;base64,[a-z0-9+/=\s]+$/i;
-    const MIN_DUPLICATE_WAIT_MS = 5000; // keep the visible "checking" wait at 5s minimum
     const POLL_MS = 2000;
 
-    // ─── WORKER API BASE (v5.1 hotfix) ─────────────────────────────────────────
-    // request.html is served by GitHub Pages, so relative "/api/..." calls
-    // would hit github.io (404). They must go to the Worker's address instead.
-    // Optional override in the address bar:  request.html?worker=https://<worker>/
-    const DEFAULT_WORKER_URL = 'https://totp-backend.ibaddie.workers.dev';
-    const WORKER_URL = (() => {
-        const clean = u => String(u || '').trim().replace(/\/+$/, '');
-        try {
-            const q = new URLSearchParams(location.search);
-            const fromUrl = clean(q.get('worker') || q.get('api'));
-            if (fromUrl) { localStorage.setItem('ib_worker_url', fromUrl); return fromUrl; }
-            const saved = clean(localStorage.getItem('ib_worker_url'));
-            if (saved) return saved;
-        } catch (e) {}
-        return clean(DEFAULT_WORKER_URL);
-    })();
+    // Send credentials only to the configured backend, never a URL override.
+    const WORKER_URL = 'https://totp-backend.ibaddie.workers.dev';
+    try { localStorage.removeItem('ib_worker_url'); } catch {}
+
 
     const state = {
         token: null,
@@ -44,7 +31,11 @@
         presenceTimer: null,
         submitAt: 0,
         waiting: false,
-        busy: false
+        busy: false,
+        processing: false,
+        pollBusy: false,
+        generation: 0,
+        lastCode: null
     };
 
     // ─── SOUND (Web Audio — no files, unlocked by real clicks) ──────────────────
@@ -71,7 +62,8 @@
             o.connect(g); g.connect(ctx.destination);
             o.start(at); o.stop(at + dur + 0.05);
         }
-        function chime() {
+        async function chime() {
+            await unlock();
             const c = ensure(); if (!c || c.state !== 'running') return false;
             const t = c.currentTime + 0.02;
             tone(880, t, 0.18); tone(1174.66, t + 0.13, 0.20); tone(1567.98, t + 0.27, 0.35);
@@ -83,14 +75,18 @@
             tone(196, t, 0.28, 'square', 0.07); tone(147, t + 0.22, 0.40, 'square', 0.07);
             return true;
         }
-        function unlock() {
+        async function unlock() {
             const c = ensure(); if (!c) return false;
             try {
                 const b = c.createBuffer(1, 1, 22050);
                 const s = c.createBufferSource(); s.buffer = b; s.connect(c.destination); s.start(0);
             } catch (e) {}
-            if (c.state === 'suspended') c.resume().catch(() => {});
-            return true;
+            let timer;
+            try {
+                await Promise.race([c.resume(), new Promise(resolve => { timer = setTimeout(resolve, 1500); })]);
+                return c.state === 'running';
+            } catch { return false; }
+            finally { clearTimeout(timer); }
         }
         return { chime, buzz, unlock };
     })();
@@ -101,6 +97,8 @@
     const hide    = el => { if (el) el.style.display = 'none'; };
 
     function resetUI() {
+        state.generation++;
+        document.querySelector('.req-card').classList.remove('rejection-mode');
         state.requestId = null;
         state.freshMode = false;
         state.waiting = false;
@@ -117,12 +115,15 @@
 
     function startWait(text) {
         state.waiting = true;
+        hide($('reqBtn'));
         hide($('uploadArea')); hide($('codeBox')); hide($('rejectBox'));
         $('waitText').textContent = text || 'Waiting for Ibaddie to review...';
         showBox($('waitArea'));
     }
 
     function showReject(reason, shot) {
+        hide($('reqBtn'));
+        document.querySelector('.req-card').classList.add('rejection-mode');
         state.waiting = false;
         if (state.polling) { clearInterval(state.polling); state.polling = null; }
         hide($('waitArea')); hide($('uploadArea')); hide($('codeBox'));
@@ -142,33 +143,32 @@
     }
 
     function showCode(code, secs) {
+        if (secs <= 0) { resetUI(); return; }
+        hide($('reqBtn'));
         state.waiting = false;
         if (state.polling) { clearInterval(state.polling); state.polling = null; }
         hide($('waitArea')); hide($('uploadArea')); hide($('rejectBox'));
         $('codeNum').textContent = code;
         showBox($('codeBox'));
-        Sound.chime();
+        const delivery = state.requestId + ':' + code;
+        if (state.lastCode !== delivery) { Sound.chime(); state.lastCode = delivery; }
+        const expiresAt = Date.now() + Math.max(0, secs) * 1000;
         let left = Math.max(1, secs || 30);
         const render = () => { $('codeTimer').textContent = left > 0 ? 'Expires in ' + left + 's' : 'Expired — request again'; };
         render();
         if (state.countdown) clearInterval(state.countdown);
         state.countdown = setInterval(() => {
-            left--;
+            left = Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000));
             if (left <= 0) { clearInterval(state.countdown); state.countdown = null; resetUI(); return; }
             render();
         }, 1000);
     }
 
     // ─── PRESENCE ────────────────────────────────────────────────────────────────
-    async function refreshPresence() {
-        try {
-            const r = await fetch(WORKER_URL + '/api/presence', { cache: 'no-store' });
-            const d = await r.json();
-            const badge = $('badge'), txt = $('badgeText');
-            if (d && d.online) { badge.className = 'badge badge-on'; txt.textContent = 'Ibaddie is online'; }
-            else { badge.className = 'badge badge-off'; txt.textContent = 'Ibaddie is offline'; }
-            badge.style.display = 'inline-flex';
-        } catch (e) {}
+    function refreshPresence() {
+        $('badge').className = 'badge badge-on';
+        $('badgeText').textContent = 'Ibaddie is online';
+        $('badge').style.display = 'inline-flex';
     }
 
     // ─── IMAGE NORMALIZATION (browser-side, deterministic) ──────────────────────
@@ -203,12 +203,8 @@
         const c = document.createElement('canvas'); c.width = w; c.height = h;
         c.getContext('2d').drawImage(bmp, 0, 0, w, h);
         const screenshot = c.toDataURL('image/jpeg', 0.85);
-        const fw = 256, fh = Math.max(1, Math.round((h / w) * 256) || 1);
-        const c2 = document.createElement('canvas'); c2.width = fw; c2.height = fh;
-        c2.getContext('2d').drawImage(bmp, 0, 0, fw, fh);
-        const fingerprint = c2.toDataURL('image/jpeg', 0.7);
         if (bmp.close) bmp.close();
-        return { screenshot, fingerprint };
+        return { screenshot };
     }
 
     // ─── SUBMIT + POLL ───────────────────────────────────────────────────────────
@@ -245,7 +241,9 @@
     }
 
     async function pollOnce() {
-        if (!state.token) return;
+        if (!state.token || state.pollBusy) return;
+        state.pollBusy = true;
+        const generation = state.generation;
         let d;
         try {
             const r = await fetch(WORKER_URL + '/api/code-request/status?token=' + encodeURIComponent(state.token), { cache: 'no-store' });
@@ -253,21 +251,24 @@
         } catch (e) {
             $('waitText').textContent = 'Reconnecting...';
             return;
-        }
-        handleStatus(d);
+        } finally { state.pollBusy = false; }
+        if (generation === state.generation) handleStatus(d);
     }
 
     function handleStatus(d) {
         if (!d || !d.status) return;
+        if (d.requestId) state.requestId = d.requestId;
         switch (d.status) {
             case 'checking':
-                $('waitText').textContent = 'Verifying your screenshot...';
+                startWait('Checking screenshot…');
                 break;
             case 'pending':
                 $('waitText').textContent = 'Waiting for Ibaddie to review...';
                 break;
             case 'request_fresh':
                 if (!state.freshMode) {
+                    hide($('reqBtn'));
+                    $('fileInput').value = '';
                     state.freshMode = true;
                     state.waiting = false;
                     if (state.polling) { clearInterval(state.polling); state.polling = null; }
@@ -281,7 +282,7 @@
                 $('waitText').textContent = 'Ibaddie approved — your code unlocks in ' + (d.waitSeconds || 1) + 's...';
                 break;
             case 'approved':
-                if (d.code) showCode(d.code, d.codeExpiresIn || 30);
+                if (d.code) showCode(d.code, d.codeExpiresIn ?? 0);
                 break;
             case 'expired':
                 resetUI();
@@ -290,13 +291,7 @@
                 const reason = d.rejectionReason || 'Screenshot rejected.';
                 // The Worker already holds duplicates for 5s; keep the visible wait
                 // at 5s minimum even if clocks drift slightly.
-                const remain = MIN_DUPLICATE_WAIT_MS - (Date.now() - state.submitAt);
-                if (remain > 0 && /OLD SCREENSHOT/i.test(reason)) {
-                    $('waitText').textContent = 'Verifying your screenshot...';
-                    setTimeout(() => showReject(reason, d.submittedScreenshot), remain);
-                } else {
-                    showReject(reason, d.submittedScreenshot);
-                }
+                showReject(reason, d.submittedScreenshot);
                 break;
             }
             case 'none':
@@ -315,7 +310,7 @@
             });
         } catch (e) {}
     }
-    window.cancelRequest = async () => { await withdraw(); resetUI(); };
+    window.cancelRequest = async () => { if (state.busy || state.processing) return; state.generation++; await withdraw(); resetUI(); };
 
     // ─── RESUME AFTER RELOAD ─────────────────────────────────────────────────────
     async function resumeIfNeeded() {
@@ -323,8 +318,9 @@
         try {
             const r = await fetch(WORKER_URL + '/api/code-request/status?token=' + encodeURIComponent(state.token), { cache: 'no-store' });
             const d = await r.json();
-            if (!d || !d.status || d.status === 'none' || d.status === 'rejected' || d.status === 'expired') return;
-            if (d.status === 'approved') { if (d.code) showCode(d.code, d.codeExpiresIn || 30); return; }
+            if (!d || !d.status || d.status === 'none' || d.status === 'expired') return;
+            if (d.status === 'rejected') { handleStatus(d); return; }
+            if (d.status === 'approved') { if (d.code) showCode(d.code, d.codeExpiresIn ?? 0); return; }
             if (d.status === 'request_fresh') { handleStatus(d); return; }
             state.requestId = d.requestId || null;
             state.submitAt = Date.now() - 10000; // old request — never re-gate the 5s window
@@ -362,22 +358,26 @@
             showBox(upload);
         });
 
-        upload.addEventListener('click', () => { if (!state.busy) input.click(); });
+        upload.addEventListener('click', event => { if (event.target !== input && !state.busy) { Sound.unlock(); input.click(); } });
 
         input.addEventListener('change', async () => {
+            if (state.busy || state.processing) return;
+            Sound.unlock();
             const file = input.files && input.files[0];
             if (!file) return;
+            state.processing = true;
+            startWait('Preparing screenshot…');
             try {
                 const payload = await processFile(file);
                 await submitShot(payload);
             } catch (e) {
                 input.value = '';
                 startWait((e.message || 'Upload failed.') + ' — press Cancel to go back.');
-            }
+            } finally { state.processing = false; input.value = ''; }
         });
 
         $('tryAgainBtn').addEventListener('click', () => {
-            withdraw(); // fire & forget — must not delay the file picker gesture
+            // A resolved rejection can be replaced directly; no racing withdraw.
             resetUI();
             hide(reqBtn);
             showBox(upload);
@@ -400,8 +400,8 @@
         $('buyerSoundBtn').addEventListener('click', () => {
             Sound.unlock();
             try { localStorage.setItem('ib_buyer_sound', '1'); } catch (e) {}
-            setTimeout(() => {
-                const ok = Sound.chime();
+            setTimeout(async () => {
+                const ok = await Sound.chime();
                 $('buyerSoundStatus').textContent = ok
                     ? 'Sound is ON — you will hear this when your code arrives.'
                     : 'Your browser blocked audio — tap the button once more, or raise the volume.';
@@ -409,7 +409,7 @@
         });
 
         refreshPresence();
-        state.presenceTimer = setInterval(refreshPresence, 10000);
+        // The requested badge is always online; no presence polling.
         resetUI();
         resumeIfNeeded();
     }
