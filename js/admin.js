@@ -1,5 +1,5 @@
 // ══════════════════════════════════════════════════════════════════════════════
-// IBADDIE — ADMIN PANEL (admin.js v5.2)
+// IBADDIE — ADMIN PANEL (admin.js v6.0)
 // ══════════════════════════════════════════════════════════════════════════════
 // v5.1 HOTFIX — "Could not reach the server":
 // This page is hosted on GitHub Pages, but the backend lives on a Cloudflare
@@ -19,25 +19,13 @@
 
     const $ = id => document.getElementById(id);
     const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const DEFAULT_REJECTION_REASON = "This doesn't show a Minecraft launcher. Please follow the guide.";
     const IMG_RE = /^data:image\/[a-z0-9.+-]+;base64,[a-z0-9+/=\s]+$/i;
 
-    // ─── WORKER API BASE (v5.1 hotfix) ─────────────────────────────────────────
-    // admin.html is served by GitHub Pages, so relative "/api/..." calls would
-    // hit github.io (404). They must go to the Worker's own address instead.
-    // You can override it any time with:  admin.html?worker=https://<worker>/
-    // (the override is remembered in this browser until you clear it).
-    const DEFAULT_WORKER_URL = 'https://totp-backend.ibaddie.workers.dev';
-    const WORKER_URL = (() => {
-        const clean = u => String(u || '').trim().replace(/\/+$/, '');
-        try {
-            const q = new URLSearchParams(location.search);
-            const fromUrl = clean(q.get('worker') || q.get('api'));
-            if (fromUrl) { localStorage.setItem('ib_worker_url', fromUrl); return fromUrl; }
-            const saved = clean(localStorage.getItem('ib_worker_url'));
-            if (saved) return saved;
-        } catch (e) {}
-        return clean(DEFAULT_WORKER_URL);
-    })();
+    // Send credentials only to the configured backend, never a URL override.
+    const WORKER_URL = 'https://totp-backend.ibaddie.workers.dev';
+    try { localStorage.removeItem('ib_worker_url'); } catch {}
+
 
     let pw = '';
     let rows = [];
@@ -47,6 +35,8 @@
     let knownPending = new Set();
     let firstPendingPoll = true;
     let soundOn = false;
+    let pendingBusy = false, loginBusy = false;
+    const reusing = new Set();
     let pollTimer = null, hbTimer = null, titleTimer = null, msgTimer = null;
     const baseTitle = document.title;
 
@@ -77,20 +67,25 @@
             o.connect(g); g.connect(ctx.destination);
             o.start(at); o.stop(at + dur + 0.05);
         }
-        function chime() {
+        async function chime() {
+            await unlock();
             const c = ensure(); if (!c || c.state !== 'running') return false;
             const t = c.currentTime + 0.02;
             tone(880, t, 0.18); tone(1174.66, t + 0.13, 0.20); tone(1567.98, t + 0.27, 0.38);
             return true;
         }
-        function unlock() {
+        async function unlock() {
             const c = ensure(); if (!c) return false;
             try {
                 const b = c.createBuffer(1, 1, 22050);
                 const s = c.createBufferSource(); s.buffer = b; s.connect(c.destination); s.start(0);
             } catch (e) {}
-            if (c.state === 'suspended') c.resume().catch(() => {});
-            return true;
+            let timer;
+            try {
+                await Promise.race([c.resume(), new Promise(resolve => { timer = setTimeout(resolve, 1500); })]);
+                return c.state === 'running';
+            } catch { return false; }
+            finally { clearTimeout(timer); }
         }
         return { chime, unlock };
     })();
@@ -113,11 +108,16 @@
         o.headers = Object.assign({ Authorization: pw, 'Content-Type': 'application/json' }, opts.headers || {});
         if (o.body && typeof o.body !== 'string') o.body = JSON.stringify(o.body);
         o.cache = 'no-store';
-        const r = await fetch(WORKER_URL + path, o);
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 20000);
+        let r;
+        try { r = await fetch(WORKER_URL + path, { ...o, signal: controller.signal }); }
+        finally { clearTimeout(timeout); }
         if (r.status === 401) { forceLogout('Session ended — please sign in again.'); throw new Error('unauthorized'); }
         let d = null;
         try { d = await r.json(); } catch (e) {}
         if (!r.ok) throw new Error((d && d.error) || ('Request failed (' + r.status + ')'));
+        if (!d || typeof d !== 'object') throw new Error('Invalid Worker response. Deploy the matching Worker update.');
         return d;
     }
 
@@ -152,8 +152,9 @@
         soundOn = true;
         try { localStorage.setItem('ib_admin_sound', '1'); } catch (e) {}
         const unlocked = Sound.unlock();
-        setTimeout(() => {
-            const ok = unlocked && Sound.chime();
+        setTimeout(async () => {
+            const ok = unlocked && await Sound.chime();
+            soundOn = ok;
             setSoundStatus(ok);
             if (ok) { const b = $('presenceBadge'); if (b && b.textContent.indexOf('Online') !== -1) b.textContent = '🟢 Online — sound on'; }
         }, 120);
@@ -166,9 +167,14 @@
     };
 
     window.login = async () => {
+        if (loginBusy) return;
         const val = ($('pw') && $('pw').value) || '';
         $('err').textContent = '';
         if (!val) { $('err').textContent = 'Enter the admin password.'; return; }
+        Sound.unlock().then(ok => { soundOn = ok; setSoundStatus(ok); });
+        loginBusy = true;
+        const loginButton = document.querySelector('#loginSec button[type=submit]');
+        loginButton.disabled = true;
         try {
             const controller = new AbortController();
             const timeout = setTimeout(() => controller.abort(), 10000);
@@ -190,12 +196,19 @@
                 $('err').textContent = 'Server error (' + r.status + ')' + detail + '. Try again.';
                 return;
             }
+            const body = await r.json().catch(() => null);
+            if (!body || body.ok !== true) { $('err').textContent = 'Unexpected login response. Deploy the matching Worker update.'; return; }
             pw = val;
             try { sessionStorage.setItem('ib_pw', pw); } catch (e) {}
-            enterDash();
         } catch (e) {
-            $('err').textContent = 'Could not reach the Worker at ' + (WORKER_URL || 'the server') + '. Check your internet, then try again.';
+            $('err').textContent = e.name === 'AbortError'
+                ? 'The Worker took too long to respond. Please try again.'
+                : 'Connection failed. Check your internet and the Worker CORS_ORIGIN setting (https://anonymous-sheesh.github.io).';
+            return;
         }
+        finally { loginBusy = false; loginButton.disabled = false; }
+        // Keep successful authentication separate from dashboard rendering.
+        enterDash();
     };
 
     function forceLogout(text) {
@@ -213,7 +226,8 @@
         const dash = $('dashSec'), login = $('loginSec');
         if (dash) dash.classList.remove('active');
         if (login) login.classList.add('active');
-        if (text) msg(text);
+        $('pw').value = '';
+        if (text) $('err').textContent = text;
     }
     window.logout = () => forceLogout('Signed out.');
 
@@ -249,36 +263,48 @@
 
     // ─── PENDING REQUESTS (poll every 5s + chime on new arrivals) ───────────────
     async function pollPending() {
+        if (pendingBusy || !pw) return;
+        pendingBusy = true;
+        try {
         let d;
         try { d = await api('/api/admin/pending'); } catch (e) { return; }
+        if (d.error) { $('pendingStatus').textContent = 'Could not refresh requests: ' + d.error; return; }
         const pending = (d && d.pending) || [];
         renderPending(pending);
 
-        const ids = new Set(pending.map(p => p.requestId));
-        const fresh = pending.filter(p => !knownPending.has(p.requestId));
+        const key = p => p.requestId + ':' + p.submittedAt;
+        const fresh = pending.filter(p => p.status !== 'request_fresh' && !knownPending.has(key(p)));
+        pending.forEach(p => knownPending.add(key(p)));
         if (firstPendingPoll) {
             if (pending.length) {
                 msg('You have ' + pending.length + ' code request' + (pending.length > 1 ? 's' : '') + ' waiting.');
                 Sound.chime();
             }
         } else if (fresh.length) {
-            const ok = Sound.chime();
+            const ok = await Sound.chime();
             if (!ok) startTitleFlash(); // audio blocked → flash the tab title instead
             msg('🔔 New code request from ' + fresh.map(f => f.buyerUser || 'a buyer').join(', ') + '!');
         }
         if (!pending.length) stopTitleFlash();
-        knownPending = ids;
+        // Seen submissions are local to each open admin panel.
         firstPendingPoll = false;
 
         const ps = $('pendingStatus');
         if (ps) ps.textContent = 'Auto-refreshes every 5s · sound is ' + (soundOn ? 'ON' : 'OFF') + ' — click "Enable / test sound" above.';
+        } finally { pendingBusy = false; }
     }
 
     function renderPending(pending) {
         const count = $('pCount'); if (count) count.textContent = pending.length;
         const list = $('pList'); if (!list) return;
+        const signature = JSON.stringify(pending.map(p => [p.requestId, p.submittedAt, p.status, p.screenshot]));
+        if (list.dataset.signature === signature) return;
+        list.dataset.signature = signature;
+        const drafts = Array.from(list.querySelectorAll('[id^="rejrow-"]'))
+            .filter(el => el.style.display !== 'none')
+            .map(el => ({ id: el.id.slice(7), value: el.querySelector('input').value }));
         if (!pending.length) { list.innerHTML = '<p class="empty">No pending requests</p>'; return; }
-        list.innerHTML = pending.map(p => {
+        list.innerHTML = pending.filter(p => /^[a-zA-Z0-9_-]+$/.test(p.requestId)).map(p => {
             const t = p.submittedAt ? new Date(p.submittedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
             const ago = Number.isFinite(p.timeAgo) ? p.timeAgo : Math.floor((Date.now() - (p.submittedAt || 0)) / 1000);
             const shot = p.screenshot && IMG_RE.test(p.screenshot)
@@ -300,12 +326,18 @@
                 '<button type="button" onclick="hideRejectForm(\'' + p.requestId + '\')">Cancel</button>' +
                 '</div></div></div>';
         }).join('');
+        drafts.forEach(d => {
+            if ($('rejrow-' + d.id)) {
+                $('rejrow-' + d.id).style.display = 'block';
+                $('rejreason-' + d.id).value = d.value;
+            }
+        });
     }
 
     window.approveRequest = async id => {
         try {
             const d = await api('/api/admin/approve', { method: 'POST', body: { requestId: id } });
-            msg('✅ Code ' + d.code + ' sent to the buyer (expires in ' + d.expiresIn + 's).');
+            msg(d.needsFreshWindow || !d.code ? '✅ Approved — a fresh code will appear for the buyer shortly.' : '✅ Code ' + d.code + ' sent to the buyer (expires in ' + d.expiresIn + 's).');
             pollPending();
         } catch (e) { if (e.message !== 'unauthorized') msg('Could not approve: ' + e.message); }
     };
@@ -318,14 +350,19 @@
     };
     window.showRejectForm = id => {
         const row = $('rejrow-' + id); if (row) row.style.display = 'block';
-        const inp = $('rejreason-' + id); if (inp) inp.focus();
+        const inp = $('rejreason-' + id);
+        if (inp) {
+            if (!inp.value.trim()) inp.value = DEFAULT_REJECTION_REASON;
+            inp.focus();
+            inp.select();
+        }
     };
     window.hideRejectForm = id => {
         const row = $('rejrow-' + id); if (row) row.style.display = 'none';
     };
     window.confirmReject = async id => {
         const inp = $('rejreason-' + id);
-        const reason = (inp && inp.value.trim()) || 'Screenshot rejected.';
+        const reason = (inp && inp.value.trim()) || DEFAULT_REJECTION_REASON;
         try {
             await api('/api/admin/reject', { method: 'POST', body: { requestId: id, reason: reason } });
             msg('Reject reason sent to the buyer.');
@@ -337,14 +374,20 @@
     async function fetchList() {
         const st = $('listStatus'); if (st) st.textContent = 'Loading accounts…';
         let d;
-        try { d = await api('/api/admin/list'); } catch (e) { if (st && e.message !== 'unauthorized') st.textContent = 'Could not load accounts.'; return; }
+        try { d = await api('/api/admin/list'); } catch (e) { if (st && e.message !== 'unauthorized') st.textContent = 'Could not load accounts: ' + e.message; return; }
         rows = (d && d.keys) || [];
+        selected = new Set([...selected].filter(id => rows.some(r => r.name === id)));
         renderTable();
+        if (d.note) {
+            st.textContent = d.note;
+            $('reusedAccounts').textContent = '—';
+            $('totalReuses').textContent = '—';
+        }
     }
     window.fetchList = fetchList;
 
     function buyerLink(name) {
-        return new URL('request.html?t=' + encodeURIComponent(name), location.href).href;
+        return new URL('request.html?token=' + encodeURIComponent(name), location.href).href;
     }
 
     function filteredRows() {
@@ -386,7 +429,7 @@
 
         tbody.innerHTML = list.map((r, i) => {
             const m = r.metadata || {};
-            const reuse = m.reuseCount > 0
+            const reuse = m.reuseHistoryUnavailable ? 'History unavailable — refresh later' : m.reuseCount > 0
                 ? '↻ ' + m.reuseCount + ' · last ' + AD.rel(m.lastReusedAt)
                 : 'No reuses yet';
             const added = (m.addedDateEstimated ? '≈ ' : '') + AD.fmtDate(m.createdAt);
@@ -436,6 +479,7 @@
         if (bar) bar.hidden = !selectionMode;
         if (cnt) cnt.textContent = selected.size + ' selected';
         if (del) del.disabled = selected.size === 0;
+        if (all) all.indeterminate = lastRenderedList.some(r => selected.has(r.name)) && !lastRenderedList.every(r => selected.has(r.name));
         if (all) all.checked = selectionMode && lastRenderedList.length > 0 && lastRenderedList.every(r => selected.has(r.name));
         const th = document.querySelector('thead .selection-cell');
         if (th) th.hidden = !selectionMode;
@@ -461,13 +505,21 @@
         let ids = [];
         try { ids = JSON.parse(dlg.dataset.ids || '[]'); } catch (e) {}
         if (!ids.length) { dlg.close(); return; }
+        if ($('confirmDeleteBtn').disabled) return;
+        $('confirmDeleteBtn').disabled = true;
+        $('cancelDeleteBtn').disabled = true;
         try {
             const d = await api('/api/admin/delete-tokens', { method: 'POST', body: { tokens: ids } });
+            selected = new Set((d.failed || []).map(f => f.token));
+            rows = rows.filter(r => !d.deleted.includes(r.name));
+            renderTable();
+            dlg.close();
             msg('Deleted ' + d.deleted.length + ' account' + (d.deleted.length > 1 ? 's' : '') + ((d.failed && d.failed.length) ? (' · ' + d.failed.length + ' failed') : '') + '.');
         } catch (e) { if (e.message !== 'unauthorized') msg('Delete failed: ' + e.message); }
-        selected.clear();
-        dlg.close();
-        fetchList();
+        finally {
+            $('confirmDeleteBtn').disabled = false;
+            $('cancelDeleteBtn').disabled = false;
+        }
     };
 
     // ─── ROW ACTIONS ─────────────────────────────────────────────────────────────
@@ -479,20 +531,26 @@
         } catch (e) { if (e.message !== 'unauthorized') msg('Could not generate code: ' + e.message); }
     };
     window.markReused = async i => {
-        const r = lastRenderedList[i]; if (!r) return;
+        const r = lastRenderedList[i]; if (!r || reusing.has(r.name)) return;
+        reusing.add(r.name);
         try {
-            await api('/api/admin/mark-reused', { method: 'POST', body: { token: r.name, eventId: (crypto.randomUUID ? crypto.randomUUID() : genFallback()) } });
+            const result = await api('/api/admin/mark-reused', { method: 'POST', body: { token: r.name, eventId: (crypto.randomUUID ? crypto.randomUUID() : genFallback()) } });
+            const m = r.metadata || (r.metadata = {});
+            m.reuseHistory = [result.event, ...(m.reuseHistory || [])].filter((ev, i, all) => all.findIndex(x => x.id === ev.id) === i);
+            m.reuseCount = m.reuseHistory.length; m.lastReusedAt = result.event.at;
+            renderTable();
             msg('♻ Marked ' + (r.metadata.user || 'account') + ' as reused today.');
-            fetchList();
         } catch (e) { if (e.message !== 'unauthorized') msg('Could not mark reused: ' + e.message); }
+        finally { reusing.delete(r.name); }
     };
     window.showHistory = i => {
         const r = lastRenderedList[i]; if (!r) return;
         const m = r.metadata || {};
         $('historyAccount').textContent = (m.user || 'Account') + ' — ' + (m.reuseCount || 0) + ' reuse' + (m.reuseCount === 1 ? '' : 's') + ' recorded.';
+        if (m.reuseHistoryUnavailable) { msg('Reuse history is temporarily unavailable. Refresh and try again.'); return; }
         const hist = m.reuseHistory || [];
         $('historyList').innerHTML = hist.length
-            ? hist.map(ev => '<li>' + AD.fmtDate(ev.at) + ' · ' + AD.rel(ev.at) + '</li>').join('')
+            ? hist.map(ev => '<li>' + AD.fmtDateTime(ev.at) + ' · ' + AD.rel(ev.at) + '</li>').join('')
             : '<li class="muted">No reuses recorded yet.</li>';
         $('historyDialog').showModal();
     };
@@ -555,6 +613,11 @@
                 .catch(() => {});
         }
     }
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible' && pw) { pollPending(); heartbeat(); }
+    });
+    document.addEventListener('pointerdown', () => { Sound.unlock().then(ok => { soundOn = ok; setSoundStatus(ok); }); }, { once: true });
+    $('deleteDialog').addEventListener('cancel', e => { if ($('confirmDeleteBtn').disabled) e.preventDefault(); });
     init();
 })();
 
