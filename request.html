@@ -67,7 +67,7 @@
         .link.gold:hover { border-bottom-color:#FFD700; }
         @media(max-width:600px){ .req-card{padding:1.5rem 1.2rem;} .req-hero h1{font-size:1.9rem;} .code-num{font-size:42px;letter-spacing:4px;} }
     </style>
-    <link rel="stylesheet" href="./css/request-enhancements.css?v=3.2">
+    <link rel="stylesheet" href="./css/request-enhancements.css?v=6.1">
 </head>
 <body class="preload req-body">
     <div class="background-anim"></div>
@@ -99,7 +99,7 @@
             <div class="code-success" id="codeSuccess">Screenshot accepted — your code is ready!</div>
             <div class="code-num" id="codeNum">000000</div>
             <div class="code-timer" id="codeTimer">Expires in 30s</div>
-            <div class="code-hint">👆 Click code to copy · Enter in launcher NOW!</div>
+            <div class="code-hint" id="codeHint">👆 Click code to copy · Enter in launcher NOW!</div>
         </div>
 
         <div id="rejectBox" class="reject" role="alert">
@@ -111,13 +111,13 @@
             <div class="reject-reason-wrap">
                 <span class="reject-reason-icon" aria-hidden="true">💬</span>
                 <div>
-                    <span class="reject-reason-label">AI'S RESPONSE.. (WHAT WAS WRONG)</span>
+                    <span class="reject-reason-label">WHY IT WAS REJECTED</span>
                     <div class="reject-reason" id="rejectReason"></div>
                 </div>
             </div>
             <div class="compare-grid">
                 <section class="compare-card good" aria-labelledby="exampleShotLabel">
-                    <div class="compare-label" id="exampleShotLabel"><span class="compare-symbol" aria-hidden="true">✓</span> Correct screenshot</div>
+                    <div class="compare-label" id="exampleShotLabel">Correct screenshot</div>
                     <div class="shot-frame correct-frame">
                         <img id="correctScreenshot" src="./images/rejection-example.jpg" alt="Correct screenshot showing the whole desktop, Minecraft launcher, and Microsoft code box">
                         <span class="good-mark" aria-hidden="true">✓</span>
@@ -127,7 +127,7 @@
                     </div>
                 </section>
                 <section class="compare-card bad" aria-labelledby="yourShotLabel">
-                    <div class="compare-label" id="yourShotLabel"><span class="compare-symbol" aria-hidden="true">✕</span> Your rejected screenshot</div>
+                    <div class="compare-label" id="yourShotLabel">Your rejected screenshot</div>
                     <div class="shot-frame">
                         <img id="rejectedScreenshot" alt="The screenshot you sent that was rejected">
                         <div id="missingRejectedScreenshot" class="missing-shot">🖼️ Screenshot preview unavailable</div>
@@ -158,7 +158,7 @@
         </div>
     </div>
 
-    <script src="./js/request.js?v=5.2"></script>
+    <script src="./js/request.js?v=6.1"></script>
     <script>
         let cc=0,ct;
         document.getElementById('adminTrigger').addEventListener('click',()=>{
