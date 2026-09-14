@@ -18,7 +18,7 @@ body.req-body .background-anim {
 
 .req-card {
     overflow: hidden;
-    transition: max-width .25s ease;
+    transition: max-width .35s ease, width .35s ease;
 }
 
 .code-num {
@@ -309,4 +309,21 @@ body.req-body .background-anim {
     .reject .reject-title {
         font-size: 1.35rem;
     }
+}
+
+/* Restore the full-width comparison inside the expanded rejection card. */
+.req-card #rejectBox {
+    width: 100%;
+    box-sizing: border-box;
+}
+.req-card.rejection-mode #rejectBox {
+    animation: rejection-reveal .3s ease both;
+}
+@keyframes rejection-reveal {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .req-card { transition: none; }
+    .req-card.rejection-mode #rejectBox { animation: none; }
 }
