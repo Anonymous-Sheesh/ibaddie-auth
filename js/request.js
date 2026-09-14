@@ -1,6 +1,9 @@
 // ══════════════════════════════════════════════════════════════════════════════
-// IBADDIE — BUYER CODE REQUEST PAGE (request.js v5.0)
+// IBADDIE — BUYER CODE REQUEST PAGE (request.js v5.2)
 // ══════════════════════════════════════════════════════════════════════════════
+// v5.1 HOTFIX: this page is hosted on GitHub Pages but the backend is a
+// Cloudflare Worker — all API calls now go to the Worker's own address
+// (WORKER_URL) instead of relative "/api/..." paths that hit github.io (404).
 // Flow: Request Code → upload screenshot → "checking" → admin review → code.
 // Every upload is normalized through a canvas before sending, and a tiny
 // thumbnail "fingerprint" is sent alongside it. The Worker hashes BOTH
@@ -14,6 +17,23 @@
     const IMG_RE = /^data:image\/[a-z0-9.+-]+;base64,[a-z0-9+/=\s]+$/i;
     const MIN_DUPLICATE_WAIT_MS = 5000; // keep the visible "checking" wait at 5s minimum
     const POLL_MS = 2000;
+
+    // ─── WORKER API BASE (v5.1 hotfix) ─────────────────────────────────────────
+    // request.html is served by GitHub Pages, so relative "/api/..." calls
+    // would hit github.io (404). They must go to the Worker's address instead.
+    // Optional override in the address bar:  request.html?worker=https://<worker>/
+    const DEFAULT_WORKER_URL = 'https://totp-backend.ibaddie.workers.dev';
+    const WORKER_URL = (() => {
+        const clean = u => String(u || '').trim().replace(/\/+$/, '');
+        try {
+            const q = new URLSearchParams(location.search);
+            const fromUrl = clean(q.get('worker') || q.get('api'));
+            if (fromUrl) { localStorage.setItem('ib_worker_url', fromUrl); return fromUrl; }
+            const saved = clean(localStorage.getItem('ib_worker_url'));
+            if (saved) return saved;
+        } catch (e) {}
+        return clean(DEFAULT_WORKER_URL);
+    })();
 
     const state = {
         token: null,
@@ -142,7 +162,7 @@
     // ─── PRESENCE ────────────────────────────────────────────────────────────────
     async function refreshPresence() {
         try {
-            const r = await fetch('/api/presence', { cache: 'no-store' });
+            const r = await fetch(WORKER_URL + '/api/presence', { cache: 'no-store' });
             const d = await r.json();
             const badge = $('badge'), txt = $('badgeText');
             if (d && d.online) { badge.className = 'badge badge-on'; txt.textContent = 'Ibaddie is online'; }
@@ -198,7 +218,7 @@
         startWait(state.freshMode ? 'Uploading your new screenshot...' : 'Verifying your screenshot...');
         state.submitAt = Date.now();
         try {
-            const endpoint = state.freshMode ? '/api/code-request/fresh' : '/api/code-request';
+            const endpoint = WORKER_URL + (state.freshMode ? '/api/code-request/fresh' : '/api/code-request');
             const r = await fetch(endpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -228,7 +248,7 @@
         if (!state.token) return;
         let d;
         try {
-            const r = await fetch('/api/code-request/status?token=' + encodeURIComponent(state.token), { cache: 'no-store' });
+            const r = await fetch(WORKER_URL + '/api/code-request/status?token=' + encodeURIComponent(state.token), { cache: 'no-store' });
             d = await r.json();
         } catch (e) {
             $('waitText').textContent = 'Reconnecting...';
@@ -288,7 +308,7 @@
     async function withdraw() {
         if (!state.token) return;
         try {
-            await fetch('/api/code-request/withdraw', {
+            await fetch(WORKER_URL + '/api/code-request/withdraw', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ token: state.token })
@@ -301,7 +321,7 @@
     async function resumeIfNeeded() {
         if (!state.token) return;
         try {
-            const r = await fetch('/api/code-request/status?token=' + encodeURIComponent(state.token), { cache: 'no-store' });
+            const r = await fetch(WORKER_URL + '/api/code-request/status?token=' + encodeURIComponent(state.token), { cache: 'no-store' });
             const d = await r.json();
             if (!d || !d.status || d.status === 'none' || d.status === 'rejected' || d.status === 'expired') return;
             if (d.status === 'approved') { if (d.code) showCode(d.code, d.codeExpiresIn || 30); return; }
